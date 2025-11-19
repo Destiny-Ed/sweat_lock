@@ -39,7 +39,7 @@ SweatLock blocks your addictive apps (TikTok, Instagram, YouTube, X, etc.) until
 | Payments (future)      | RevenueCat                                      |
 | CI/CD                  | GitHub Actions + Codemagic                      |
 
-## Project Structure (Layer-First)
+<!-- ## Project Structure (Layer-First)
 
 lib/
 ├── main.dart
@@ -57,7 +57,7 @@ lib/
 │   ├── screens/             # Onboarding, Dashboard, LockScreen, Stats
 │   ├── widgets/             # Reusable UI (RepCounter, PoseOverlay, Confetti)
 │   └── theme/               # AppTheme, colors, typography
-└── injection.dart           # MultiProvider setup
+└── injection.dart           # MultiProvider setup -->
 
 
 ## Prerequisites
@@ -73,7 +73,7 @@ lib/
 
 ```bash
 # Clone repo
-git clone https://github.com/destinyed/sweatlock.git
+git clone https://github.com/destiny_ed/sweat_lock.git
 cd sweatlock
 
 # Get dependencies
