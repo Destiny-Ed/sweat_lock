@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:sweat_lock/core/helpers.dart';
+import 'package:sweat_lock/core/enums.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/presentation/providers/onboarding_provider.dart';
 import 'package:sweat_lock/presentation/widgets/social_button.dart';
@@ -10,31 +10,37 @@ class Onboarding extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final vm = context.read<OnboardingProvider>();
+    final vm = context.watch<OnboardingProvider>();
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const SizedBox(height: 50),
-
+            (context.screenSize().width / 3).height(),
             Expanded(
               child: PageView(
+                onPageChanged: (index) => vm.currentIndex = index,
                 children: vm.onboardingItems.asMap().entries.map((entry) {
                   return Column(
-                    spacing: 20,
+                    spacing: 25,
                     children: [
                       Container(
-                        width: context.sc,
+                        width: context.screenSize().width,
                         height: 300,
                         decoration: BoxDecoration(color: AppColors.green),
                         child: Image.asset(entry.value.image),
                       ),
                       Text(
                         entry.value.title,
+                        textAlign: TextAlign.center,
                         style: Theme.of(
                           context,
                         ).textTheme.headlineLarge?.copyWith(fontSize: 30),
+                      ),
+                      Text(
+                        entry.value.subtitle,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ],
                   );
@@ -62,9 +68,10 @@ class Onboarding extends StatelessWidget {
               }).toList(),
             ),
 
-            const SizedBox(height: 20),
+            40.height(),
 
             CustomButton(text: "Get Started"),
+            40.height(),
           ],
         ),
       ),
