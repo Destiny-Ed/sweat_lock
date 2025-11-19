@@ -270,8 +270,11 @@ class AppOnboardingStepThree extends StatelessWidget {
                 (element) =>
                     element.workout.toLowerCase() ==
                     vm.selectedWorkout?.workout.toLowerCase(),
-                orElse: () =>
-                    WorkoutModel(workout: "", isReps: false, duration: 0),
+                orElse: () => WorkoutModel(
+                  workout: "workout",
+                  isReps: true,
+                  duration: 20,
+                ),
               );
               return Container(
                 margin: const EdgeInsets.only(bottom: 20),
@@ -279,7 +282,9 @@ class AppOnboardingStepThree extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(50),
                   color: Theme.of(context).cardColor,
-                  border: Border.all(color: AppColors.gray),
+                  border: Border.all(
+                    color: AppColors.darkGray.withOpacity(0.5),
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -333,7 +338,9 @@ class AppOnboardingStepThree extends StatelessWidget {
                     ),
                     Padding(
                       padding: const EdgeInsets.all(8.0),
-                      child: Divider(color: AppColors.gray),
+                      child: Divider(
+                        color: AppColors.darkGray.withOpacity(0.5),
+                      ),
                     ),
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -353,22 +360,38 @@ class AppOnboardingStepThree extends StatelessWidget {
                         Row(
                           spacing: 10,
                           children: [
-                            CircleAvatar(
-                              backgroundColor: Theme.of(
-                                context,
-                              ).scaffoldBackgroundColor,
-                              child: Icon(Icons.remove),
+                            GestureDetector(
+                              onTap: () {
+                                ///decrement
+                              },
+                              child: CircleAvatar(
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).scaffoldBackgroundColor,
+                                foregroundColor: Theme.of(
+                                  context,
+                                ).textTheme.titleSmall?.color,
+                                child: Icon(Icons.remove),
+                              ),
                             ),
 
                             Text(
-                              "15",
+                              selectedWorkout.duration.toString(),
                               style: Theme.of(context).textTheme.headlineLarge,
                             ),
-                            CircleAvatar(
-                              backgroundColor: Theme.of(
-                                context,
-                              ).scaffoldBackgroundColor,
-                              child: Icon(Icons.add),
+                            GestureDetector(
+                              onTap: () {
+                                //increment
+                              },
+                              child: CircleAvatar(
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).scaffoldBackgroundColor,
+                                foregroundColor: Theme.of(
+                                  context,
+                                ).textTheme.titleSmall?.color,
+                                child: Icon(Icons.add),
+                              ),
                             ),
                           ],
                         ),
