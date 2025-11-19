@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:sweat_lock/core/enums.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/presentation/providers/onboarding_provider.dart';
+import 'package:sweat_lock/presentation/views/onboarding/choose_apps_onboarding.dart';
 import 'package:sweat_lock/presentation/widgets/social_button.dart';
 
 class Onboarding extends StatelessWidget {
@@ -70,7 +71,17 @@ class Onboarding extends StatelessWidget {
 
             40.height(),
 
-            CustomButton(text: "Get Started"),
+            CustomButton(
+              text: "Get Started",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChooseAppsOnboarding(),
+                  ),
+                );
+              },
+            ),
             40.height(),
           ],
         ),

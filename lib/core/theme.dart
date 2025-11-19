@@ -23,6 +23,7 @@ class AppTheme {
       primary: AppColors.primaryGreen,
       secondary: AppColors.primaryGreen,
     ),
+    cardColor: AppColors.lightGreen,
     inputDecorationTheme: InputDecorationTheme(
       hintStyle: TextStyle(color: AppColors.bgWhite),
       labelStyle: TextStyle(color: AppColors.bgWhite),
@@ -63,6 +64,13 @@ class AppTheme {
     appBarTheme: const AppBarTheme(
       backgroundColor: AppColors.bgGreen,
       elevation: 0,
+      iconTheme: IconThemeData(color: AppColors.white),
+      actionsIconTheme: IconThemeData(color: AppColors.white),
+      titleTextStyle: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        color: AppColors.white,
+      ),
       centerTitle: false,
     ),
     visualDensity: VisualDensity.adaptivePlatformDensity,
@@ -70,6 +78,7 @@ class AppTheme {
 
   static final lightTheme = ThemeData(
     primaryColor: AppColors.primaryGreen,
+    cardColor: AppColors.gray,
     scaffoldBackgroundColor: AppColors.bgWhite,
     colorScheme: ColorScheme.fromSwatch().copyWith(
       primary: AppColors.primaryGreen,
@@ -117,6 +126,13 @@ class AppTheme {
       backgroundColor: AppColors.bgWhite,
       elevation: 0,
       centerTitle: false,
+      iconTheme: IconThemeData(color: AppColors.black),
+      actionsIconTheme: IconThemeData(color: AppColors.black),
+      titleTextStyle: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        color: AppColors.black,
+      ),
     ),
     visualDensity: VisualDensity.adaptivePlatformDensity,
   );
