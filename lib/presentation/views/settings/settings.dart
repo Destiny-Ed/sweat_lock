@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sweat_lock/core/constant.dart';
-import 'package:sweat_lock/core/enums.dart';
 import 'package:sweat_lock/core/extensions.dart';
+import 'package:sweat_lock/presentation/widgets/social_button.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -133,6 +133,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             style: Theme.of(context).textTheme.titleSmall,
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      color: Theme.of(context).primaryColor.withOpacity(0.2),
+                      border: Border.all(color: Theme.of(context).primaryColor),
+                    ),
+                    child: Column(
+                      spacing: 10,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListTile(
+                          contentPadding: const EdgeInsets.all(0),
+                          leading: CircleAvatar(
+                            radius: 25,
+                            backgroundColor: Theme.of(context).primaryColor,
+                            child: Icon(Icons.star_outline),
+                          ),
+                          title: Text(
+                            "Upgrade to premium".cap,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          subtitle: Text(
+                            "unlock custom exercies, unlimited unlocks, and advanced stats"
+                                .capitalize,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                        ),
+
+                        CustomButton(text: "Go unlimited".cap),
                       ],
                     ),
                   ),

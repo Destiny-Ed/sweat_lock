@@ -55,9 +55,7 @@ class _WorkoutSuccessScreenState extends State<WorkoutSuccessScreen> {
                       ),
                       subtitle: Text(
                         "meme lord level 12".cap,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleSmall!.copyWith(),
+                        style: Theme.of(context).textTheme.titleSmall,
                       ),
                       trailing: CircleAvatar(
                         radius: 25,
@@ -95,9 +93,7 @@ class _WorkoutSuccessScreenState extends State<WorkoutSuccessScreen> {
                         ),
                         Text(
                           "your shareable story template".cap,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleSmall!.copyWith(),
+                          style: Theme.of(context).textTheme.titleSmall,
                         ),
                       ],
                     ),
