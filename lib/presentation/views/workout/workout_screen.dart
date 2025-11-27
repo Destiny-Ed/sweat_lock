@@ -1,6 +1,11 @@
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
+import 'package:provider/provider.dart';
 import 'package:sweat_lock/core/extensions.dart';
+import 'package:sweat_lock/core/theme.dart';
+import 'package:sweat_lock/presentation/providers/workout_provider.dart';
+import 'package:sweat_lock/presentation/views/workout/workout_success.dart';
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -11,33 +16,62 @@ class WorkoutScreen extends StatefulWidget {
 
 class _WorkoutScreenState extends State<WorkoutScreen> {
   @override
+  void initState() {
+    super.initState();
+    context.read<WorkoutProvider>().init();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.only(top: 20.0),
-          child: Stack(
+    return Consumer<WorkoutProvider>(
+      builder: (context, workoutVm, child) {
+        return Scaffold(
+          body: Stack(
             children: [
+              workoutVm.controller == null
+                  ? 0.height()
+                  : workoutVm.controller!.value.isInitialized
+                  ? Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: CameraPreview(workoutVm.controller!),
+                    )
+                  : 0.height(),
+
               ///header
               Positioned(
                 top: 0,
                 right: 0,
                 left: 0,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20.0,
+                    vertical: 60,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          color: Theme.of(context).secondaryHeaderColor,
-                        ),
-                        child: Text(
-                          "End workout".cap,
-                          style: Theme.of(context).textTheme.titleMedium,
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => WorkoutSuccessScreen(),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            color: Theme.of(context).secondaryHeaderColor,
+                          ),
+                          child: Text(
+                            "End workout".cap,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
                         ),
                       ),
 
@@ -74,6 +108,22 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   ),
                 ),
               ),
+
+              Align(
+                alignment: Alignment.center,
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Text(
+                    "Chest to ground, lazy!",
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontSize: 30,
+                      color: AppColors.red,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
                 child: CustomScrollView(
@@ -156,8 +206,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
