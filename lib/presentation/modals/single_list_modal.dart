@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sweat_lock/core/enums.dart';
+import 'package:sweat_lock/core/extensions.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/presentation/widgets/social_button.dart';
 

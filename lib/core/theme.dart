@@ -19,6 +19,7 @@ class AppColors {
 class AppTheme {
   static final darkTheme = ThemeData(
     primaryColor: AppColors.primaryGreen,
+    secondaryHeaderColor: AppColors.blackGreen,
     scaffoldBackgroundColor: AppColors.bgGreen,
     colorScheme: ColorScheme.fromSwatch().copyWith(
       primary: AppColors.primaryGreen,
@@ -50,6 +51,7 @@ class AppTheme {
         fontWeight: FontWeight.w700,
         color: AppColors.white,
       ),
+
       titleLarge: GoogleFonts.inter(
         fontSize: 16,
         fontWeight: FontWeight.bold,
@@ -79,6 +81,7 @@ class AppTheme {
 
   static final lightTheme = ThemeData(
     primaryColor: AppColors.primaryGreen,
+    secondaryHeaderColor: AppColors.darkGray,
     cardColor: AppColors.gray,
     scaffoldBackgroundColor: AppColors.bgWhite,
     colorScheme: ColorScheme.fromSwatch().copyWith(

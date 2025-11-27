@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sweat_lock/core/enums.dart';
+import 'package:sweat_lock/core/extensions.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/presentation/providers/onboarding_provider.dart';
 import 'package:sweat_lock/presentation/views/onboarding/choose_apps_onboarding.dart';

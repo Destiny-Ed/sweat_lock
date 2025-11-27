@@ -12,6 +12,15 @@ class AppsOnboardingProvider extends ChangeNotifier {
 
   int maxIndex = 3;
 
+  ExerciseAppModel? _selectedExerciseAppWorkout;
+  ExerciseAppModel? get selectedExerciseAppWorkout =>
+      _selectedExerciseAppWorkout;
+
+  set selectedExerciseAppWorkout(ExerciseAppModel appData) {
+    _selectedExerciseAppWorkout = appData;
+    notifyListeners();
+  }
+
   List<String> musicGenres = [
     "pop",
     "hip hop / rap",
@@ -27,7 +36,7 @@ class AppsOnboardingProvider extends ChangeNotifier {
   WorkoutModel? _selectedWorkout;
   WorkoutModel? get selectedWorkout => _selectedWorkout;
 
-  set selectedWorkout(WorkoutModel workout) {
+  set selectedWorkout(WorkoutModel? workout) {
     _selectedWorkout = workout;
     notifyListeners();
   }

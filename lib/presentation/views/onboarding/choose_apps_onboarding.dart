@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sweat_lock/core/enums.dart';
+import 'package:sweat_lock/core/extensions.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/data/models/workout_model.dart';
 import 'package:sweat_lock/presentation/modals/multi_selection_modal.dart';

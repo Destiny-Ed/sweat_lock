@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sweat_lock/core/enums.dart';
+import 'package:sweat_lock/core/extensions.dart';
 import 'package:sweat_lock/core/theme.dart';
 
 /// Shows a bottom sheet where user can select multiple genres
