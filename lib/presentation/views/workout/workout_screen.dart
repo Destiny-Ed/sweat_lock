@@ -28,15 +28,23 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         return Scaffold(
           body: Stack(
             children: [
-              workoutVm.controller == null
-                  ? 0.height()
-                  : workoutVm.controller!.value.isInitialized
+              workoutVm.isLoading
+                  ? Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.only(left: 10),
+                        height: 30,
+                        width: 30,
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  : workoutVm.controller.value.isInitialized
                   ? Positioned(
                       top: 0,
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      child: CameraPreview(workoutVm.controller!),
+                      child: CameraPreview(workoutVm.controller),
                     )
                   : 0.height(),
 
@@ -54,13 +62,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       GestureDetector(
+                        behavior: HitTestBehavior.translucent,
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => WorkoutSuccessScreen(),
-                            ),
-                          );
+                          _endWorkout();
                         },
                         child: Container(
                           padding: const EdgeInsets.all(10),
@@ -121,20 +125,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                ),
-              ),
-
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: CustomScrollView(
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: Column(spacing: 20, children: [
-                          
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ),
 
@@ -208,6 +198,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ),
         );
       },
+    );
+  }
+
+  void _endWorkout() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => WorkoutSuccessScreen()),
     );
   }
 }

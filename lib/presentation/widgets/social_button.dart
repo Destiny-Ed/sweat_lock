@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 class CustomButton extends StatelessWidget {
-  const CustomButton({super.key, required this.text, this.onTap});
+  const CustomButton({super.key, required this.text, this.onTap, this.bgColor});
 
   final String text;
   final VoidCallback? onTap;
+  final Color? bgColor;
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +16,7 @@ class CustomButton extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         width: MediaQuery.of(context).size.width,
         decoration: BoxDecoration(
-          color: Theme.of(context).primaryColor,
+          color: bgColor ?? Theme.of(context).primaryColor,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(text, style: Theme.of(context).textTheme.titleMedium),
