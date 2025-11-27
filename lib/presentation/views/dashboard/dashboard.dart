@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sweat_lock/core/extensions.dart';
+import 'package:sweat_lock/presentation/views/dashboard/blocked_apps_details.dart';
 import 'package:sweat_lock/presentation/views/notifications/notification.dart';
 import 'package:sweat_lock/presentation/views/workout/workout_screen.dart';
 import 'package:sweat_lock/presentation/widgets/social_button.dart';
@@ -77,31 +78,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   15.height(),
 
                   ...List.generate(5, (index) {
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        color: Theme.of(context).cardColor,
-                      ),
-                      child: ListTile(
-                        title: Text(
-                          "Social App",
-                          style: Theme.of(context).textTheme.titleLarge,
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => BlockedAppsDetailsScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          color: Theme.of(context).cardColor,
                         ),
-                        subtitle: Text(
-                          "Blocked until 50 reps",
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        leading: CircleAvatar(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).secondaryHeaderColor,
-                        ),
-                        trailing: IconButton(
-                          color: Theme.of(context).primaryColor,
-                          onPressed: () {},
-                          icon: Icon(Icons.lock),
+                        child: ListTile(
+                          title: Text(
+                            "Social App",
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          subtitle: Text(
+                            "Blocked until 50 reps",
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          leading: CircleAvatar(
+                            backgroundColor: Theme.of(
+                              context,
+                            ).secondaryHeaderColor,
+                          ),
+                          trailing: IconButton(
+                            color: Theme.of(context).primaryColor,
+                            onPressed: () {},
+                            icon: Icon(Icons.lock),
+                          ),
                         ),
                       ),
                     );
@@ -111,14 +122,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Container(
                     margin: const EdgeInsets.symmetric(vertical: 20),
                     child: CustomButton(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => WorkoutScreen(),
-                          ),
-                        );
-                      },
+                      onTap: () {},
                       text: "Block apps to reduce doomscrolling",
                     ),
                   ),
