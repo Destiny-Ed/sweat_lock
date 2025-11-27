@@ -28,7 +28,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         return Scaffold(
           body: Stack(
             children: [
-              workoutVm.isLoading
+              workoutVm.isLoading && workoutVm.controller == null
                   ? Align(
                       alignment: Alignment.centerLeft,
                       child: Container(
@@ -38,15 +38,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                         child: CircularProgressIndicator(),
                       ),
                     )
-                  : workoutVm.controller.value.isInitialized
-                  ? Positioned(
+                  : Positioned(
                       top: 0,
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      child: CameraPreview(workoutVm.controller),
-                    )
-                  : 0.height(),
+                      child: CameraPreview(workoutVm.controller!),
+                    ),
 
               ///header
               Positioned(

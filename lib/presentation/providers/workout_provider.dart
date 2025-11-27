@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 class WorkoutProvider extends ChangeNotifier {
   late List<CameraDescription> _cameras;
 
-  late CameraController controller;
+  CameraController? controller;
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -18,7 +18,7 @@ class WorkoutProvider extends ChangeNotifier {
 
     controller = CameraController(_cameras[1], ResolutionPreset.max);
     await Future.delayed(const Duration(seconds: 1));
-    controller
+    controller!
         .initialize()
         .then((_) {
           _isLoading = false;
@@ -40,9 +40,9 @@ class WorkoutProvider extends ChangeNotifier {
         });
   }
 
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
+  // @override
+  // void dispose() {
+  //   controller?.dispose();
+  //   super.dispose();
+  // }
 }

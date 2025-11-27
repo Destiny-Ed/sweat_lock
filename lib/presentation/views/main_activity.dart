@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:sweat_lock/main.dart';
 import 'package:sweat_lock/presentation/providers/main_activity_provider.dart';
 import 'package:sweat_lock/presentation/views/dashboard/dashboard.dart';
 import 'package:sweat_lock/presentation/views/settings/settings.dart';
