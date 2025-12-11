@@ -47,15 +47,7 @@ dependencies:
   google_mlkit_pose_detection: ^0.14.0
   device_apps: ^2.2.0
   flutter_local_notifications: ^19.5.0
-  # app_limiter: ^0.0.4
-  app_limiter:
-    git:
-      url: https://github.com/Destiny-Ed/AppLimiter-Plugin-Flutetr.git
-      ref: app_limit_update
-  app_links: ^7.0.0
-  shared_preferences: ^2.5.4
-  # screen_time: ^0.10.3
-  # ios_screen_time_tools: ^0.0.13
+
 
 dev_dependencies:
   flutter_test:

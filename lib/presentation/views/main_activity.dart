@@ -7,9 +7,11 @@ import 'package:flutter_accessibility_service/constants.dart';
 import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
 import 'package:provider/provider.dart';
 import 'package:sweat_lock/presentation/providers/main_activity_provider.dart';
+import 'package:sweat_lock/presentation/views/dashboard/blocked_apps_details.dart';
 import 'package:sweat_lock/presentation/views/dashboard/dashboard.dart';
 import 'package:sweat_lock/presentation/views/settings/settings.dart';
 import 'package:sweat_lock/presentation/views/stats/stats.dart';
+import 'package:sweat_lock/service/access_request_manager.dart';
 
 class MainActivity extends StatefulWidget {
   const MainActivity({super.key});
@@ -18,7 +20,8 @@ class MainActivity extends StatefulWidget {
   State<MainActivity> createState() => _MainActivityState();
 }
 
-class _MainActivityState extends State<MainActivity> {
+class _MainActivityState extends State<MainActivity>
+    with WidgetsBindingObserver {
   final List<Widget> _screens = const [
     DashboardScreen(),
     StatsScreen(),
@@ -30,8 +33,28 @@ class _MainActivityState extends State<MainActivity> {
     super.initState();
     if (Platform.isAndroid) {
       _setupAccessibility();
-    }else {
+    } else {
       log("Setup Ios Blocking feature");
+    }
+
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      AccessRequestManager.checkForPendingRequest().then((request) {
+        if (request != null && mounted) {
+          log("bundle id  : ${request['bundleId']}");
+          log("timestamp id  : ${request['timestamp']}");
+          log("appName  : ${request['appName']}");
+          log("appToken  : ${request['appToken']}");
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => BlockedAppsDetailsScreen()),
+          );
+        }
+      });
     }
   }
 

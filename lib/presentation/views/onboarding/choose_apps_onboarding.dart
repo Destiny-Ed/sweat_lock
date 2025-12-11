@@ -7,14 +7,12 @@ import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/data/models/workout_model.dart';
 import 'package:sweat_lock/presentation/modals/single_list_modal.dart';
 import 'package:sweat_lock/presentation/providers/apps_onboarding_provider.dart';
-import 'package:sweat_lock/presentation/views/dashboard/blocked_apps_details.dart';
 import 'package:sweat_lock/presentation/views/main_activity.dart';
 import 'package:sweat_lock/presentation/widgets/busy_overlay.dart';
 import 'package:sweat_lock/presentation/widgets/error_reload_state.dart';
 import 'package:sweat_lock/presentation/widgets/social_button.dart';
 import 'package:sweat_lock/service/access_request_manager.dart';
-import 'package:sweat_lock/service/services.dart';
-
+ 
 class ChooseAppsOnboarding extends StatefulWidget {
   const ChooseAppsOnboarding({super.key});
 
@@ -61,7 +59,7 @@ class _ChooseAppsOnboardingState extends State<ChooseAppsOnboarding> {
 
             CustomButton(
               text: buttonText(vm.currentIndex).cap,
-              onTap: () {
+              onTap: () async {
                 if (vm.currentIndex == 1) {
                   _pageController.nextPage(
                     duration: const Duration(milliseconds: 400),
@@ -111,28 +109,11 @@ class AppOnboardingStepOne extends StatefulWidget {
   State<AppOnboardingStepOne> createState() => _AppOnboardingStepOneState();
 }
 
-class _AppOnboardingStepOneState extends State<AppOnboardingStepOne>
-    with WidgetsBindingObserver {
+class _AppOnboardingStepOneState extends State<AppOnboardingStepOne> {
   @override
   void initState() {
     super.initState();
     widget.vm.loadAndroidApps();
-
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      AccessRequestManager.checkForPendingRequest().then((request) {
-        if (request != null && mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => BlockedAppsDetailsScreen()),
-          );
-        }
-      });
-    }
   }
 
   @override
@@ -165,7 +146,7 @@ class _AppOnboardingStepOneState extends State<AppOnboardingStepOne>
                 child: CustomButton(
                   text: "pick iOS apps to block",
                   onTap: () {
-                    AppService.pickIOSApps();
+                    AccessRequestManager.pickIOSApps();
                   },
                 ),
               ),

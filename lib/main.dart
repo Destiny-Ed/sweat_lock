@@ -1,10 +1,8 @@
 import 'dart:developer';
-
-import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/injection.dart';
