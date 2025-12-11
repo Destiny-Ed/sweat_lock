@@ -1,14 +1,19 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:sweat_lock/core/enums.dart';
 import 'package:sweat_lock/core/extensions.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/data/models/workout_model.dart';
-import 'package:sweat_lock/presentation/modals/multi_selection_modal.dart';
 import 'package:sweat_lock/presentation/modals/single_list_modal.dart';
 import 'package:sweat_lock/presentation/providers/apps_onboarding_provider.dart';
+import 'package:sweat_lock/presentation/views/dashboard/blocked_apps_details.dart';
 import 'package:sweat_lock/presentation/views/main_activity.dart';
+import 'package:sweat_lock/presentation/widgets/busy_overlay.dart';
+import 'package:sweat_lock/presentation/widgets/error_reload_state.dart';
 import 'package:sweat_lock/presentation/widgets/social_button.dart';
+import 'package:sweat_lock/service/access_request_manager.dart';
+import 'package:sweat_lock/service/services.dart';
 
 class ChooseAppsOnboarding extends StatefulWidget {
   const ChooseAppsOnboarding({super.key});
@@ -45,7 +50,7 @@ class _ChooseAppsOnboardingState extends State<ChooseAppsOnboarding> {
                   vm.currentIndex = value + 1;
                 },
                 children: [
-                  AppOnboardingStepOne(),
+                  AppOnboardingStepOne(vm: vm),
                   AppOnboardingStepTwo(vm: vm),
                   AppOnboardingStepThree(vm: vm),
                 ],
@@ -98,68 +103,187 @@ class _ChooseAppsOnboardingState extends State<ChooseAppsOnboarding> {
   }
 }
 
-class AppOnboardingStepOne extends StatelessWidget {
-  const AppOnboardingStepOne({super.key});
+class AppOnboardingStepOne extends StatefulWidget {
+  final AppsOnboardingProvider vm;
+  const AppOnboardingStepOne({super.key, required this.vm});
+
+  @override
+  State<AppOnboardingStepOne> createState() => _AppOnboardingStepOneState();
+}
+
+class _AppOnboardingStepOneState extends State<AppOnboardingStepOne>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    widget.vm.loadAndroidApps();
+
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      AccessRequestManager.checkForPendingRequest().then((request) {
+        if (request != null && mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => BlockedAppsDetailsScreen()),
+          );
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 15,
-      children: [
-        Text(
-          "choose the apps that ruin your life".cap,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineLarge?.copyWith(fontSize: 30),
-        ),
-        Text(
-          "select the apps you want to lock. You'll earn time back by exercising."
-              .capitalize,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-
-        10.height(),
-
-        Expanded(
-          child: GridView(
-            shrinkWrap: true,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisExtent: 60,
-            ),
-            children: List.generate(10, (index) {
-              return Container(
-                margin: EdgeInsets.only(
-                  bottom: 10,
-                  left: index.isOdd ? 10 : 0,
-                  right: index.isEven ? 10 : 0,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(50),
-                  color: Theme.of(context).cardColor,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: 8,
-                  children: [
-                    CircleAvatar(),
-                    Text(
-                      "Tiktok",
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    Checkbox(
-                      shape: OvalBorder(),
-                      value: true,
-                      onChanged: (value) {},
-                    ),
-                  ],
-                ),
-              );
-            }),
+    return BusyOverlay(
+      show: widget.vm.isLoading,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 15,
+        children: [
+          Text(
+            "choose the apps that ruin your life".cap,
+            style: Theme.of(
+              context,
+            ).textTheme.headlineLarge?.copyWith(fontSize: 30),
           ),
-        ),
-      ],
+          Text(
+            "select the apps you want to lock. You'll earn time back by exercising."
+                .capitalize,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+
+          5.height(),
+
+          if (Platform.isIOS)
+            Align(
+              alignment: Alignment.topRight,
+              child: SizedBox(
+                width: context.screenSize().width / 2,
+                child: CustomButton(
+                  text: "pick iOS apps to block",
+                  onTap: () {
+                    AppService.pickIOSApps();
+                  },
+                ),
+              ),
+            ),
+
+          5.height(),
+
+          if (Platform.isAndroid &&
+              widget.vm.availableAndroidApps.isEmpty &&
+              !widget.vm.isLoading)
+            ErrorReloadStateWidget(
+              onRetry: widget.vm.loadAndroidApps,
+              message: "No App(s) Loaded",
+            ),
+
+          if (Platform.isAndroid &&
+              widget.vm.availableAndroidApps.isNotEmpty &&
+              !widget.vm.isLoading)
+            Expanded(
+              child: GridView(
+                shrinkWrap: true,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisExtent: 60,
+                ),
+                children: List.generate(widget.vm.availableAndroidApps.length, (
+                  index,
+                ) {
+                  final apps = widget.vm.availableAndroidApps[index];
+
+                  return Container(
+                    margin: EdgeInsets.only(
+                      bottom: 10,
+                      left: index.isOdd ? 10 : 0,
+                      right: index.isEven ? 10 : 0,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(50),
+                      color: Theme.of(context).cardColor,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 8,
+                      children: [
+                        CircleAvatar(),
+                        Text(
+                          apps.appName.cap,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Checkbox(
+                          shape: OvalBorder(),
+                          value: widget.vm.isAppSelected(apps.packageName),
+                          onChanged: (value) {
+                            widget.vm.updateSelectedBlockedApps(
+                              AppModel(
+                                appName: apps.appName,
+                                icon: apps.apkFilePath,
+                                packageName: apps.packageName,
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            ),
+
+          if (Platform.isIOS &&
+              widget.vm.selectedBlockedApps.isNotEmpty &&
+              !widget.vm.isLoading)
+            Expanded(
+              child: GridView(
+                shrinkWrap: true,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisExtent: 60,
+                ),
+                children: List.generate(widget.vm.selectedBlockedApps.length, (
+                  index,
+                ) {
+                  final apps = widget.vm.selectedBlockedApps[index];
+
+                  return Container(
+                    margin: EdgeInsets.only(
+                      bottom: 10,
+                      left: index.isOdd ? 10 : 0,
+                      right: index.isEven ? 10 : 0,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(50),
+                      color: Theme.of(context).cardColor,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 8,
+                      children: [
+                        CircleAvatar(),
+                        Text(
+                          apps.appName.cap,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Checkbox(
+                          shape: OvalBorder(),
+                          value: widget.vm.isAppSelected(apps.packageName),
+                          onChanged: (value) {
+                            widget.vm.updateSelectedBlockedApps(apps);
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

@@ -1,4 +1,10 @@
+import 'dart:developer';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_accessibility_service/accessibility_event.dart';
+import 'package:flutter_accessibility_service/constants.dart';
+import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
 import 'package:provider/provider.dart';
 import 'package:sweat_lock/presentation/providers/main_activity_provider.dart';
 import 'package:sweat_lock/presentation/views/dashboard/dashboard.dart';
@@ -18,6 +24,16 @@ class _MainActivityState extends State<MainActivity> {
     StatsScreen(),
     SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (Platform.isAndroid) {
+      _setupAccessibility();
+    }else {
+      log("Setup Ios Blocking feature");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,5 +65,27 @@ class _MainActivityState extends State<MainActivity> {
         );
       },
     );
+  }
+
+  Future<void> _setupAccessibility() async {
+    final List<String> blockedPackages = [
+      'com.tiktok',
+      'com.instagram.android',
+      'com.google.android.youtube',
+    ]; // Example blocked apps
+    bool isEnabled =
+        await FlutterAccessibilityService.isAccessibilityPermissionEnabled();
+    if (!isEnabled) {
+      await FlutterAccessibilityService.requestAccessibilityPermission();
+    }
+
+    // Listen for events
+    FlutterAccessibilityService.accessStream.listen((AccessibilityEvent event) {
+      if (event.eventType == EventType.typeWindowStateChanged &&
+          blockedPackages.contains(event.packageName)) {
+        // Blocked app launched - show overlay
+        FlutterAccessibilityService.showOverlayWindow();
+      }
+    });
   }
 }

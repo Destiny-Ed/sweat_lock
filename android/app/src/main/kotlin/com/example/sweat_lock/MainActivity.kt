@@ -1,4 +1,4 @@
-package com.sweatlock.app
+package com.sweat.lock
 
 import io.flutter.embedding.android.FlutterActivity
 

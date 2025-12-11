@@ -9,3 +9,5 @@ class OnboardingModel {
     required this.subtitle,
   });
 }
+
+
