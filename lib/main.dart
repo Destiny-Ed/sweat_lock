@@ -28,7 +28,7 @@ Future<void> main() async {
   // Check immediately when app opens
   final request = await AccessRequestManager.checkForPendingRequest();
   if (request != null) {
-    print("User requested access to: ${request['appId']}");
+    print("User requested access to: ${request['appName']}");
     log("User requested access to: ${request['timestamp']}");
     // Show your "Allow 10 more minutes?" dialog immediately!
   }

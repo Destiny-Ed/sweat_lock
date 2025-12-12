@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
   static const blue = Color(0xFF1565C0);
@@ -46,23 +45,23 @@ class AppTheme {
       ),
     ),
     textTheme: TextTheme(
-      headlineLarge: GoogleFonts.inter(
+      headlineLarge: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w700,
         color: AppColors.white,
       ),
 
-      titleLarge: GoogleFonts.inter(
+      titleLarge: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.bold,
         color: AppColors.white,
       ),
-      titleMedium: GoogleFonts.inter(
+      titleMedium: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w500,
         color: AppColors.white,
       ),
-      titleSmall: GoogleFonts.inter(fontSize: 12, color: AppColors.white),
+      titleSmall: TextStyle(fontSize: 12, color: AppColors.white),
     ),
     appBarTheme: const AppBarTheme(
       backgroundColor: AppColors.bgGreen,
@@ -109,22 +108,22 @@ class AppTheme {
       ),
     ),
     textTheme: TextTheme(
-      headlineLarge: GoogleFonts.inter(
+      headlineLarge: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w700,
         color: AppColors.black,
       ),
-      titleLarge: GoogleFonts.inter(
+      titleLarge: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.bold,
         color: AppColors.black,
       ),
-      titleMedium: GoogleFonts.inter(
+      titleMedium: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w500,
         color: AppColors.black,
       ),
-      titleSmall: GoogleFonts.inter(fontSize: 12, color: AppColors.black),
+      titleSmall: TextStyle(fontSize: 12, color: AppColors.black),
     ),
     appBarTheme: const AppBarTheme(
       backgroundColor: AppColors.bgWhite,

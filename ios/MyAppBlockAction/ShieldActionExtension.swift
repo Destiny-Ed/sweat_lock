@@ -5,37 +5,6 @@
 ////  Created by Destiny Dikeocha on 12/11/25.
 ////
 
-//
-//import ManagedSettings
-//import UserNotifications
-//
-//class ShieldActionExtension: ShieldActionDelegate {
-//
-//    override func handle(
-//        action: ShieldAction,
-//        for application: ApplicationToken,
-//        completionHandler: @escaping (ShieldActionResponse) -> Void
-//    ) {
-//        if action == .primaryButtonPressed {
-//            // Tell your main app: "someone wants to unblock!"
-//            let shared = UserDefaults(suiteName: "group.com.sweat.lock.shield")!
-//            shared.set(Date().timeIntervalSince1970, forKey: "requestTime")
-////            shared.set(application.bundleIdentifier ?? "", forKey: "requestedApp")
-//
-//            // Optional: send a local notification so user sees something instantly
-//            let content = UNMutableNotificationContent()
-//            content.title = "Request received!"
-//            content.body = "Open Sweat Lock to approve"
-//            content.sound = .default
-//            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-//            UNUserNotificationCenter.current().add(request)
-//        }
-//
-//        // Always allow the app to open when they press the button
-//        completionHandler(.close)
-//    }
-//}
-
 // ShieldActionExtension.swift
 import ManagedSettings
 import UserNotifications
@@ -57,11 +26,18 @@ class ShieldActionExtension: ShieldActionDelegate {
 
             // NEW: Look up pre-stored details
             let shared = UserDefaults(suiteName: "group.com.sweat.lock.shield")!
-            let tokenMap =
-                shared.dictionary(forKey: "appTokenMappings") as? [String: [String: String]] ?? [:]
 
+            let app = Application(token: applicationToken)
+
+            let appName = app.localizedDisplayName ?? "Unknown App"
+            let bundleId = app.bundleIdentifier ?? "unknown"
             let tokenKey = applicationToken.tokenKey
-           
+
+            shared.set(appName, forKey: "requestedAppName")
+            shared.set(bundleId, forKey: "requestedAppBundleID")
+            shared.set(Date().timeIntervalSince1970, forKey: "requestTimestamp")
+            shared.set(tokenKey, forKey: "requestedAppToken")
+            shared.synchronize()
 
             // Send notification with real app name
             let content = UNMutableNotificationContent()

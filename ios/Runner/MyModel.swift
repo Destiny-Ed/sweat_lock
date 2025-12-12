@@ -44,7 +44,7 @@ class MyModel: ObservableObject {
         store.shield.applicationCategories =
             applications.categoryTokens.isEmpty
             ? nil
-        : ShieldSettings.ActivityCategoryPolicy.specific(applications.categoryTokens)
+            : ShieldSettings.ActivityCategoryPolicy.specific(applications.categoryTokens)
 
         // Save tokens as strings to App Group → Flutter can read this
         let shared = UserDefaults(suiteName: "group.com.sweat.lock.shield")!
@@ -52,7 +52,7 @@ class MyModel: ObservableObject {
         // Convert tokens to stable string keys
         let appTokenStrings = applications.applicationTokens.map { String(describing: $0) }
         let categoryTokenStrings = applications.categoryTokens.map { String(describing: $0) }
-        
+
         let allBlockedTokens = appTokenStrings + categoryTokenStrings
 
         // Save as array
@@ -63,4 +63,6 @@ class MyModel: ObservableObject {
         print("Tokens: \(allBlockedTokens)")
 
     }
+
+    
 }

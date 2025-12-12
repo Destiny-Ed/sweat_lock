@@ -31,7 +31,10 @@ var globalMethodCall = ""
                 let bundleId = shared.string(forKey: "requestedAppBundleID") ?? "unknown"
                 let appName = shared.string(forKey: "requestedAppName") ?? "Unknown App"
                 let appToken = shared.string(forKey: "requestedAppToken") ?? "Unknown Token"
-
+               
+                print("time stamp : \(timestamp)")
+                print("app Name : \(appName)")
+               
                 if timestamp > 0 {
                     result([
                         "timestamp": timestamp,
@@ -54,20 +57,17 @@ var globalMethodCall = ""
                 if #available(iOS 16.0, *) {
                     self.requestPermission(result: result)
                 } else {
-                    result(
-                        FlutterError(code: "UNSUPPORTED", message: "iOS 16+ required", details: nil)
-                    )
+                    result(FlutterError(code: "UNSUPPORTED", message: "iOS 16+ required", details: nil))
                 }
 
             } else if call.method == "blockApp" {
                 if #available(iOS 16.0, *) {
                     self.handleAppSelection(method: "selectAppsToDiscourage", result: result)
                 } else {
-                    result(
-                        FlutterError(code: "UNSUPPORTED", message: "iOS 16+ required", details: nil)
-                    )
+                    result(FlutterError(code: "UNSUPPORTED", message: "iOS 16+ required", details: nil))
                 }
 
+            
             } else {
                 result(FlutterMethodNotImplemented)
             }
@@ -116,7 +116,7 @@ var globalMethodCall = ""
                 // After picker is dismissed — return the saved tokens
                 self.returnBlockedTokens(to: result)
             }
-            //            result(nil) // We return later
+            // result(nil) // We return later
         } else {
             Task {
                 do {
@@ -193,9 +193,7 @@ var globalMethodCall = ""
                     let newStatus = AuthorizationCenter.shared.authorizationStatus
                     result(newStatus == .approved)
                 } catch {
-                    result(
-                        FlutterError(
-                            code: "AUTH_ERROR", message: error.localizedDescription, details: nil))
+                    result(FlutterError(code: "AUTH_ERROR", message: error.localizedDescription, details: nil))
                 }
             }
         }

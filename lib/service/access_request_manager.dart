@@ -10,6 +10,7 @@ class AccessRequestManager {
   static Future<Map<String, dynamic>?> checkForPendingRequest() async {
     try {
       final result = await _channel.invokeMethod('getPendingRequest');
+      log("result from above ::: $result");
       if (result != null) {
         return {
           'timestamp': result['timestamp'] as double,
