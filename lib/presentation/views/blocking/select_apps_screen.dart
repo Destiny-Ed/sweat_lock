@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/presentation/providers/blocking_provider.dart';
+import 'package:sweat_lock/presentation/views/blocking/ios_nudge_screen.dart';
+import 'package:sweat_lock/services/ios_nudge_service.dart';
 
 class SelectAppsScreen extends StatefulWidget {
   const SelectAppsScreen({super.key});
@@ -13,14 +15,48 @@ class SelectAppsScreen extends StatefulWidget {
 }
 
 class _SelectAppsScreenState extends State<SelectAppsScreen> {
+  bool _iosLoading = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final vm = context.read<BlockingProvider>();
-      vm.loadInstalledApps();
-      vm.checkAccessibility();
+      if (Platform.isAndroid) {
+        vm.loadInstalledApps();
+        vm.checkAccessibility();
+      } else if (Platform.isIOS) {
+        IosNudgeService.instance.loadSavedSelections();
+        vm.loadBlockedApps();
+      }
     });
+  }
+
+  Future<void> _handleIosSelect() async {
+    setState(() => _iosLoading = true);
+    final authorized = await IosNudgeService.instance.requestAuthorization();
+    if (!authorized) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Screen Time permission needs a paid Apple Developer account + Family Controls entitlement.',
+            ),
+          ),
+        );
+      }
+      setState(() => _iosLoading = false);
+      return;
+    }
+
+    final apps = await IosNudgeService.instance.selectApps();
+    if (mounted) {
+      context.read<BlockingProvider>().loadBlockedApps();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${apps.length} apps selected for monitoring')),
+      );
+    }
+    setState(() => _iosLoading = false);
   }
 
   @override
@@ -29,21 +65,113 @@ class _SelectAppsScreenState extends State<SelectAppsScreen> {
       appBar: AppBar(title: const Text('Select Apps to Lock')),
       body: Consumer<BlockingProvider>(
         builder: (context, vm, _) {
-          if (!Platform.isAndroid) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Full app blocking is available on Android.\n\niOS uses smart usage nudges instead.',
-                  textAlign: TextAlign.center,
-                ),
+          // -------------------- iOS --------------------
+          if (Platform.isIOS) {
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.blueAccent),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'iOS Smart Nudge Mode',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Apple does not allow hard real-time app blocking. '
+                          'SweatLock uses usage-based prompts instead: after ~25 minutes on selected apps, '
+                          'you get a workout nudge.',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _iosLoading ? null : _handleIosSelect,
+                    icon: _iosLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.apps),
+                    label: Text(
+                      _iosLoading ? 'Opening…' : 'Select apps (Screen Time)',
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const IosNudgeScreen(usageMinutes: 25),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.preview),
+                    label: const Text('Preview nudge screen'),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Monitored apps (${vm.blockedApps.where((a) => a.bundleId.isNotEmpty).length})',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: vm.blockedApps.where((a) => a.bundleId.isNotEmpty).isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No iOS apps selected yet.\nRequires Family Controls entitlement.',
+                              textAlign: TextAlign.center,
+                            ),
+                          )
+                        : ListView(
+                            children: vm.blockedApps
+                                .where((a) => a.bundleId.isNotEmpty)
+                                .map(
+                                  (a) => ListTile(
+                                    leading: const CircleAvatar(
+                                      child: Icon(Icons.phone_iphone),
+                                    ),
+                                    title: Text(a.appName),
+                                    subtitle: Text(
+                                      '${a.requiredReps} ${a.exerciseType}',
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.delete_outline),
+                                      onPressed: () =>
+                                          vm.removeBlockedApp(a.id),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                  ),
+                ],
               ),
             );
           }
 
+          // -------------------- Android --------------------
           return Column(
             children: [
-              // Accessibility banner
               if (!vm.accessibilityEnabled)
                 Container(
                   width: double.infinity,
@@ -76,10 +204,9 @@ class _SelectAppsScreenState extends State<SelectAppsScreen> {
                     ],
                   ),
                 ),
-
-              // Selected count
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
                     Text(
@@ -88,11 +215,11 @@ class _SelectAppsScreenState extends State<SelectAppsScreen> {
                     ),
                     const Spacer(),
                     if (vm.accessibilityEnabled)
-                      const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                      const Icon(Icons.check_circle,
+                          color: Colors.green, size: 20),
                   ],
                 ),
               ),
-
               Expanded(
                 child: vm.isLoadingApps
                     ? const Center(child: CircularProgressIndicator())
