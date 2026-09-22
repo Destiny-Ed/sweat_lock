@@ -6,17 +6,24 @@ import 'package:sweat_lock/core/extensions.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/presentation/providers/workout_provider.dart';
 import 'package:sweat_lock/presentation/views/workout/workout_success.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class WorkoutScreen extends StatefulWidget {
   final int? targetReps;
   final String? exerciseType;
   final String? unlockedAppId;
+  final String? playlistName;
+  final String? playlistUrl;
+  final String? appName;
 
   const WorkoutScreen({
     super.key,
     this.targetReps,
     this.exerciseType,
     this.unlockedAppId,
+    this.playlistName,
+    this.playlistUrl,
+    this.appName,
   });
 
   @override
@@ -33,16 +40,24 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         targetReps: widget.targetReps,
         exerciseType: widget.exerciseType,
         unlockedAppId: widget.unlockedAppId,
+        playlistName: widget.playlistName,
+        playlistUrl: widget.playlistUrl,
+        appName: widget.appName,
       );
       await vm.startWorkout();
     });
+  }
+
+  Future<void> _openPlaylist(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<WorkoutProvider>(
       builder: (context, workoutVm, child) {
-        // Auto navigate on completion
         if (!workoutVm.isWorkoutActive &&
             workoutVm.currentReps >= workoutVm.targetReps &&
             workoutVm.currentReps > 0) {
@@ -62,13 +77,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           body: Stack(
             fit: StackFit.expand,
             children: [
-              // Camera preview
               if (workoutVm.isLoading || workoutVm.controller == null)
                 const Center(child: CircularProgressIndicator())
               else
                 CameraPreview(workoutVm.controller!),
 
-              // Top bar
               Positioned(
                 top: 0,
                 left: 0,
@@ -131,7 +144,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                             ],
                           ),
                           backgroundColor: Colors.white24,
-                          progressColor: Theme.of(context).primaryColor,
+                          progressColor: AppColors.primaryGreen,
                         ),
                       ],
                     ),
@@ -139,7 +152,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 ),
               ),
 
-              // Feedback text
               Align(
                 alignment: Alignment.center,
                 child: Padding(
@@ -151,17 +163,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                           color: AppColors.red,
                           fontWeight: FontWeight.bold,
                           shadows: const [
-                            Shadow(
-                              blurRadius: 8,
-                              color: Colors.black87,
-                            ),
+                            Shadow(blurRadius: 8, color: Colors.black87),
                           ],
                         ),
                   ),
                 ),
               ),
 
-              // Bottom exercise info
               Positioned(
                 bottom: 0,
                 left: 0,
@@ -169,7 +177,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.75),
+                    color: Colors.black.withValues(alpha: 0.8),
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(24),
                     ),
@@ -177,6 +185,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (workoutVm.appName != null)
+                        Text(
+                          'Unlocking ${workoutVm.appName}',
+                          style: const TextStyle(
+                            color: AppColors.primaryGreen,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      const SizedBox(height: 6),
                       Text(
                         workoutVm.exerciseType.cap,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -191,13 +208,42 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                               color: Colors.white70,
                             ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       LinearProgressIndicator(
                         value: workoutVm.progress,
                         minHeight: 8,
                         borderRadius: BorderRadius.circular(8),
                         backgroundColor: Colors.white24,
-                        color: Theme.of(context).primaryColor,
+                        color: AppColors.primaryGreen,
+                      ),
+                      const SizedBox(height: 16),
+                      // Per-app playlist
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          backgroundColor:
+                              AppColors.primaryGreen.withValues(alpha: 0.25),
+                          child: const Icon(Icons.music_note,
+                              color: AppColors.primaryGreen),
+                        ),
+                        title: Text(
+                          workoutVm.playlistName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'Tap to open playlist',
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
+                        trailing: IconButton(
+                          onPressed: () =>
+                              _openPlaylist(workoutVm.playlistUrl),
+                          icon: const Icon(Icons.play_arrow,
+                              color: AppColors.primaryGreen),
+                        ),
+                        onTap: () => _openPlaylist(workoutVm.playlistUrl),
                       ),
                     ],
                   ),
