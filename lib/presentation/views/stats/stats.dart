@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sweat_lock/core/extensions.dart';
+import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/presentation/providers/stats_provider.dart';
 import 'package:sweat_lock/presentation/views/stats/bar_chart_widget.dart';
 
@@ -16,19 +17,18 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Your Stats"),
+        title: const Text('Your Stats'),
         automaticallyImplyLeading: false,
       ),
-
       body: Consumer<StatsProvider>(
-        builder: (context, statsProvider, child) {
+        builder: (context, stats, child) {
+          final top = stats.topAppByReps;
           return CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 15.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 15),
                   child: Column(
-                    spacing: 10,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
@@ -39,30 +39,32 @@ class _StatsScreenState extends State<StatsScreen> {
                           color: Theme.of(context).cardColor,
                         ),
                         child: Column(
-                          spacing: 10,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "Lifetime Total".cap,
+                              'Lifetime Total'.cap,
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                             Text(
-                              "4,827 push-ups".cap,
+                              '${stats.lifetimeReps} reps'.cap,
                               style: Theme.of(context).textTheme.headlineLarge,
+                            ),
+                            4.height(),
+                            Text(
+                              '${stats.totalReps} in ${stats.selectedTab}'.cap,
+                              style: Theme.of(context).textTheme.titleSmall,
                             ),
                           ],
                         ),
                       ),
-
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10.0),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                         child: Text(
-                          "= 1,205,000 meters scrolled prevented 😂".cap,
+                          '= ${(stats.lifetimeReps * 250).toString()} meters scrolled prevented 😂'
+                              .cap,
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ),
-
-                      ///Display tab
                       Container(
                         padding: const EdgeInsets.all(5),
                         decoration: BoxDecoration(
@@ -70,55 +72,43 @@ class _StatsScreenState extends State<StatsScreen> {
                           color: Theme.of(context).cardColor,
                         ),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: List.generate(
-                            statsProvider.statTab.length,
-                            (index) {
-                              final tab = statsProvider.statTab[index];
-                              final isSelected =
-                                  tab == statsProvider.selectedTab;
-                              return Expanded(
-                                child: GestureDetector(
-                                  onTap: () {
-                                    statsProvider.selectedTab = tab;
-                                  },
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 400),
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: isSelected
-                                        ? BoxDecoration(
-                                            borderRadius: BorderRadius.circular(
-                                              15,
-                                            ),
-                                            color: Theme.of(
-                                              context,
-                                            ).secondaryHeaderColor,
-                                          )
-                                        : null,
-                                    child: Text(
-                                      tab.cap,
-                                      textAlign: TextAlign.center,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleSmall,
-                                    ),
+                          children: List.generate(stats.statTab.length, (index) {
+                            final tab = stats.statTab[index];
+                            final isSelected = tab == stats.selectedTab;
+                            return Expanded(
+                              child: GestureDetector(
+                                onTap: () => stats.selectedTab = tab,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: isSelected
+                                      ? BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(15),
+                                          color: Theme.of(context)
+                                              .secondaryHeaderColor,
+                                        )
+                                      : null,
+                                  child: Text(
+                                    tab.cap,
+                                    textAlign: TextAlign.center,
+                                    style:
+                                        Theme.of(context).textTheme.titleSmall,
                                   ),
                                 ),
-                              );
-                            },
-                          ),
+                              ),
+                            );
+                          }),
                         ),
                       ),
                       10.height(),
-                      StatsBarChart(),
-
-                      //
+                      StatsBarChart(weeklyValues: stats.weeklyReps),
+                      16.height(),
                       Text(
-                        "Screen time cost".cap,
+                        'Screen time cost'.cap,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       10.height(),
-
                       Container(
                         padding: const EdgeInsets.symmetric(
                           vertical: 5,
@@ -129,38 +119,38 @@ class _StatsScreenState extends State<StatsScreen> {
                           color: Theme.of(context).cardColor,
                         ),
                         child: ListTile(
-                          contentPadding: const EdgeInsets.all(0),
+                          contentPadding: EdgeInsets.zero,
                           title: Text(
-                            "most expensive app".cap,
+                            'most expensive app'.cap,
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           subtitle: Text(
-                            "instagram",
+                            top?.key ?? 'None yet',
                             style: Theme.of(context).textTheme.titleSmall,
                           ),
                           leading: CircleAvatar(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).secondaryHeaderColor,
-                            child: Icon(Icons.camera),
+                            backgroundColor:
+                                Theme.of(context).secondaryHeaderColor,
+                            child: const Icon(Icons.apps),
                           ),
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                "1,240 reps".cap,
-                                style: Theme.of(context).textTheme.titleMedium,
+                                '${top?.value ?? 0} reps'.cap,
+                                style:
+                                    Theme.of(context).textTheme.titleMedium,
                               ),
                               Text(
-                                "this month".cap,
+                                stats.selectedTab.cap,
                                 style: Theme.of(context).textTheme.titleSmall,
                               ),
                             ],
                           ),
                         ),
                       ),
-
+                      10.height(),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           vertical: 5,
@@ -171,37 +161,28 @@ class _StatsScreenState extends State<StatsScreen> {
                           color: Theme.of(context).cardColor,
                         ),
                         child: ListTile(
-                          contentPadding: const EdgeInsets.all(0),
+                          contentPadding: EdgeInsets.zero,
                           title: Text(
-                            "most used app".cap,
+                            'workouts completed'.cap,
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           subtitle: Text(
-                            "instagram",
+                            stats.selectedTab.cap,
                             style: Theme.of(context).textTheme.titleSmall,
                           ),
                           leading: CircleAvatar(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).secondaryHeaderColor,
-                            child: Icon(Icons.camera),
+                            backgroundColor:
+                                AppColors.primaryGreen.withValues(alpha: 0.2),
+                            child: const Icon(Icons.fitness_center,
+                                color: AppColors.primaryGreen),
                           ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                "1,240 reps".cap,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              Text(
-                                "this month".cap,
-                                style: Theme.of(context).textTheme.titleSmall,
-                              ),
-                            ],
+                          trailing: Text(
+                            '${stats.totalWorkouts}',
+                            style: Theme.of(context).textTheme.headlineLarge,
                           ),
                         ),
                       ),
+                      30.height(),
                     ],
                   ),
                 ),
