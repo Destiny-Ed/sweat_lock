@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:sweat_lock/core/enums.dart';
 import 'package:sweat_lock/core/extensions.dart';
 import 'package:sweat_lock/core/theme.dart';
-import 'package:sweat_lock/data/models/workout_model.dart';
-import 'package:sweat_lock/presentation/modals/multi_selection_modal.dart';
+import 'package:sweat_lock/data/models/blocked_app.dart';
 import 'package:sweat_lock/presentation/modals/single_list_modal.dart';
 import 'package:sweat_lock/presentation/providers/apps_onboarding_provider.dart';
+import 'package:sweat_lock/presentation/providers/blocking_provider.dart';
 import 'package:sweat_lock/presentation/views/main_activity.dart';
 import 'package:sweat_lock/presentation/widgets/social_button.dart';
 
@@ -19,6 +18,7 @@ class ChooseAppsOnboarding extends StatefulWidget {
 
 class _ChooseAppsOnboardingState extends State<ChooseAppsOnboarding> {
   final _pageController = PageController();
+  bool _saving = false;
 
   @override
   void initState() {
@@ -28,12 +28,42 @@ class _ChooseAppsOnboardingState extends State<ChooseAppsOnboarding> {
     });
   }
 
+  Future<void> _onContinue(AppsOnboardingProvider vm) async {
+    final error = vm.validateStep(vm.currentIndex);
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+
+    if (vm.currentIndex < vm.maxIndex) {
+      if (vm.currentIndex == 2) {
+        vm.applyGenresToApps();
+      }
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeIn,
+      );
+      return;
+    }
+
+    // Final step — save to Hive
+    setState(() => _saving = true);
+    await vm.saveToHive();
+    if (mounted) {
+      context.read<BlockingProvider>().loadBlockedApps();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const MainActivity()),
+        (_) => false,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<AppsOnboardingProvider>();
     return Scaffold(
-      appBar: AppBar(title: Text("Step ${vm.currentIndex} of ${vm.maxIndex}")),
-
+      appBar: AppBar(title: Text('Step ${vm.currentIndex} of ${vm.maxIndex}')),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -41,41 +71,19 @@ class _ChooseAppsOnboardingState extends State<ChooseAppsOnboarding> {
             Expanded(
               child: PageView(
                 controller: _pageController,
-                onPageChanged: (value) {
-                  vm.currentIndex = value + 1;
-                },
+                physics: const NeverScrollableScrollPhysics(),
+                onPageChanged: (value) => vm.currentIndex = value + 1,
                 children: [
-                  AppOnboardingStepOne(),
+                  AppOnboardingStepOne(vm: vm),
                   AppOnboardingStepTwo(vm: vm),
                   AppOnboardingStepThree(vm: vm),
                 ],
               ),
             ),
-
             10.height(),
-
             CustomButton(
-              text: buttonText(vm.currentIndex).cap,
-              onTap: () {
-                if (vm.currentIndex == 1) {
-                  _pageController.nextPage(
-                    duration: const Duration(milliseconds: 400),
-                    curve: Curves.easeIn,
-                  );
-                } else if (vm.currentIndex == 2) {
-                  _pageController.nextPage(
-                    duration: const Duration(milliseconds: 400),
-                    curve: Curves.easeIn,
-                  );
-                } else {
-                  //index 3
-                  ///save all
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => MainActivity()),
-                  );
-                }
-              },
+              text: _saving ? 'Saving…' : buttonText(vm.currentIndex).cap,
+              onTap: _saving ? null : () => _onContinue(vm),
             ),
             40.height(),
           ],
@@ -85,78 +93,106 @@ class _ChooseAppsOnboardingState extends State<ChooseAppsOnboarding> {
   }
 
   String buttonText(int index) {
-    String text = "continue";
     switch (index) {
       case 1:
-        text = "lock apps & continue";
+        return 'lock apps & continue';
       case 2:
-        text = "continue";
+        return 'continue';
       case 3:
-        text = "save & continue";
+        return 'save & continue';
+      default:
+        return 'continue';
     }
-    return text;
   }
 }
 
 class AppOnboardingStepOne extends StatelessWidget {
-  const AppOnboardingStepOne({super.key});
+  final AppsOnboardingProvider vm;
+  const AppOnboardingStepOne({super.key, required this.vm});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 15,
       children: [
         Text(
-          "choose the apps that ruin your life".cap,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineLarge?.copyWith(fontSize: 30),
+          'choose the apps that ruin your life'.cap,
+          style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 28),
         ),
+        8.height(),
         Text(
-          "select the apps you want to lock. You'll earn time back by exercising."
+          'Select the apps you want to lock. Empty until you pick some.'
               .capitalize,
           style: Theme.of(context).textTheme.titleMedium,
         ),
-
-        10.height(),
-
-        Expanded(
-          child: GridView(
-            shrinkWrap: true,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisExtent: 60,
+        16.height(),
+        if (vm.selectedPackages.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'No apps selected yet',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AppColors.primaryGreen,
+                  ),
             ),
-            children: List.generate(10, (index) {
-              return Container(
-                margin: EdgeInsets.only(
-                  bottom: 10,
-                  left: index.isOdd ? 10 : 0,
-                  right: index.isEven ? 10 : 0,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(50),
-                  color: Theme.of(context).cardColor,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: 8,
-                  children: [
-                    CircleAvatar(),
-                    Text(
-                      "Tiktok",
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    Checkbox(
-                      shape: OvalBorder(),
-                      value: true,
-                      onChanged: (value) {},
-                    ),
-                  ],
+          ),
+        Expanded(
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisExtent: 64,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+            ),
+            itemCount: vm.suggestedApps.length,
+            itemBuilder: (context, index) {
+              final app = vm.suggestedApps[index];
+              final selected = vm.isSuggestedSelected(app);
+              return GestureDetector(
+                onTap: () => vm.toggleSuggestedApp(app),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(50),
+                    color: Theme.of(context).cardColor,
+                    border: selected
+                        ? Border.all(color: AppColors.primaryGreen, width: 2)
+                        : null,
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: selected
+                            ? AppColors.primaryGreen
+                            : Theme.of(context).secondaryHeaderColor,
+                        child: Text(
+                          app.name.characters.first,
+                          style: TextStyle(
+                            color: selected ? Colors.black : Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      8.width(),
+                      Expanded(
+                        child: Text(
+                          app.name,
+                          style: Theme.of(context).textTheme.titleMedium,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Checkbox(
+                        shape: const OvalBorder(),
+                        value: selected,
+                        activeColor: AppColors.primaryGreen,
+                        onChanged: (_) => vm.toggleSuggestedApp(app),
+                      ),
+                    ],
+                  ),
                 ),
               );
-            }),
+            },
           ),
         ),
       ],
@@ -172,32 +208,27 @@ class AppOnboardingStepTwo extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 15,
       children: [
         Text(
-          "tune your workout".cap,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineLarge?.copyWith(fontSize: 30),
+          'tune your workout'.cap,
+          style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 28),
         ),
+        8.height(),
         Text(
-          "pick your favorite music genres. We'll build playlists to keep you motivated."
+          'Pick music genres. Each locked app gets its own playlist (dummy for now).'
               .capitalize,
           style: Theme.of(context).textTheme.titleMedium,
         ),
-
-        10.height(),
-
+        16.height(),
         Expanded(
-          child: ListView(
-            shrinkWrap: true,
-            children: List.generate(vm.musicGenres.length, (index) {
+          child: ListView.builder(
+            itemCount: vm.musicGenres.length,
+            itemBuilder: (context, index) {
               final genre = vm.musicGenres[index];
-              final isSelected = vm.selectedGenres.contains(
-                genre.toLowerCase(),
-              );
+              final isSelected =
+                  vm.selectedGenres.contains(genre.toLowerCase());
               return GestureDetector(
-                onTap: () => vm.selectedGenres = genre,
+                onTap: () => vm.toggleGenre(genre),
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.only(right: 10, left: 20),
@@ -209,8 +240,6 @@ class AppOnboardingStepTwo extends StatelessWidget {
                         : null,
                   ),
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 8,
                     children: [
                       Expanded(
                         child: Text(
@@ -219,17 +248,16 @@ class AppOnboardingStepTwo extends StatelessWidget {
                         ),
                       ),
                       Checkbox(
-                        shape: OvalBorder(),
+                        shape: const OvalBorder(),
                         value: isSelected,
-                        onChanged: (value) {
-                          vm.selectedGenres = genre;
-                        },
+                        activeColor: AppColors.primaryGreen,
+                        onChanged: (_) => vm.toggleGenre(genre),
                       ),
                     ],
                   ),
                 ),
               );
-            }),
+            },
           ),
         ),
       ],
@@ -239,180 +267,163 @@ class AppOnboardingStepTwo extends StatelessWidget {
 
 class AppOnboardingStepThree extends StatelessWidget {
   final AppsOnboardingProvider vm;
-  AppOnboardingStepThree({super.key, required this.vm});
+  const AppOnboardingStepThree({super.key, required this.vm});
 
   @override
   Widget build(BuildContext context) {
+    final apps = vm.selectedBlockedApps;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 15,
       children: [
         Text(
-          "set your challenges".cap,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineLarge?.copyWith(fontSize: 30),
+          'set your challenges'.cap,
+          style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 28),
         ),
+        8.height(),
         Text(
-          "choose a workout to unlock each app."
-              .capitalize
-              .capitalize
-              .capitalize,
+          'Each app has its own workout type, reps, and playlist.'.capitalize,
           style: Theme.of(context).textTheme.titleMedium,
         ),
-
-        10.height(),
-
+        16.height(),
         Expanded(
-          child: ListView(
-            shrinkWrap: true,
-            children: List.generate(4, (index) {
-              final selectedWorkout = vm.workouts.firstWhere(
-                (element) =>
-                    element.workout.toLowerCase() ==
-                    vm.selectedWorkout?.workout.toLowerCase(),
-                orElse: () => WorkoutModel(
-                  workout: "workout",
-                  isReps: true,
-                  duration: 20,
-                ),
-              );
-              return Container(
-                margin: const EdgeInsets.only(bottom: 20),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(50),
-                  color: Theme.of(context).cardColor,
-                  border: Border.all(
-                    color: AppColors.darkGray.withOpacity(0.5),
+          child: apps.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No apps selected.\nGo back and pick at least one.',
+                    textAlign: TextAlign.center,
                   ),
+                )
+              : ListView.builder(
+                  itemCount: apps.length,
+                  itemBuilder: (context, index) {
+                    final app = apps[index];
+                    return _AppChallengeCard(app: app, vm: vm);
+                  },
                 ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: 8,
-                      children: [
-                        CircleAvatar(),
-                        Expanded(
-                          child: Text(
-                            "instagram".cap,
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () async {
-                            showGenrePickerBottomSheet(
-                              context: context,
-                              title: "select workout",
-                              items: vm.workouts.map((e) => e.workout).toList(),
-
-                              onGenreSelected: (workout) {
-                                //Update this later
-                                vm.selectedWorkout = vm.workouts
-                                    .where(
-                                      (e) =>
-                                          e.workout.toLowerCase() ==
-                                          workout.toLowerCase(),
-                                    )
-                                    .first;
-                              },
-                              currentSelected: selectedWorkout.workout,
-                            );
-                          },
-                          child: Row(
-                            children: [
-                              Text(
-                                selectedWorkout.workout.cap,
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(color: AppColors.primaryGreen),
-                              ),
-                              Icon(
-                                Icons.arrow_drop_down,
-                                size: 40,
-                                color: AppColors.primaryGreen,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Divider(
-                        color: AppColors.darkGray.withOpacity(0.5),
-                      ),
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: 8,
-                      children: [
-                        Icon(
-                          getIconAndString(selectedWorkout.isReps).icon,
-                          size: 25,
-                          color: Theme.of(context).textTheme.titleMedium?.color,
-                        ),
-                        Expanded(
-                          child: Text(
-                            getIconAndString(selectedWorkout.isReps).title.cap,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                        ),
-                        Row(
-                          spacing: 10,
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                ///decrement
-                              },
-                              child: CircleAvatar(
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).scaffoldBackgroundColor,
-                                foregroundColor: Theme.of(
-                                  context,
-                                ).textTheme.titleSmall?.color,
-                                child: Icon(Icons.remove),
-                              ),
-                            ),
-
-                            Text(
-                              selectedWorkout.duration.toString(),
-                              style: Theme.of(context).textTheme.headlineLarge,
-                            ),
-                            GestureDetector(
-                              onTap: () {
-                                //increment
-                              },
-                              child: CircleAvatar(
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).scaffoldBackgroundColor,
-                                foregroundColor: Theme.of(
-                                  context,
-                                ).textTheme.titleSmall?.color,
-                                child: Icon(Icons.add),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ),
         ),
       ],
     );
   }
+}
 
-  ({IconData icon, String title}) getIconAndString(bool isReps) {
-    if (isReps) {
-      return (icon: Icons.replay, title: "reps");
-    } else {
-      return (icon: Icons.alarm, title: "duration(sec)");
-    }
+class _AppChallengeCard extends StatelessWidget {
+  final BlockedApp app;
+  final AppsOnboardingProvider vm;
+
+  const _AppChallengeCard({required this.app, required this.vm});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: Theme.of(context).cardColor,
+        border: Border.all(color: AppColors.darkGray.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: AppColors.primaryGreen.withValues(alpha: 0.2),
+                child: Text(
+                  app.appName.characters.first,
+                  style: const TextStyle(
+                    color: AppColors.primaryGreen,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              10.width(),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      app.appName,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    Text(
+                      app.playlistName,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  showGenrePickerBottomSheet(
+                    context: context,
+                    title: 'select workout',
+                    items: vm.workouts.map((e) => e.workout).toList(),
+                    currentSelected: app.exerciseType,
+                    onGenreSelected: (workout) {
+                      vm.setAppExercise(app.packageName, workout);
+                    },
+                  );
+                },
+                child: Row(
+                  children: [
+                    Text(
+                      app.exerciseType.cap,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: AppColors.primaryGreen,
+                          ),
+                    ),
+                    const Icon(
+                      Icons.arrow_drop_down,
+                      color: AppColors.primaryGreen,
+                      size: 32,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 24),
+          Row(
+            children: [
+              Icon(
+                Icons.replay,
+                size: 22,
+                color: Theme.of(context).textTheme.titleMedium?.color,
+              ),
+              8.width(),
+              Expanded(
+                child: Text(
+                  'reps'.cap,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              GestureDetector(
+                onTap: () => vm.decrementReps(app.packageName),
+                child: CircleAvatar(
+                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                  child: const Icon(Icons.remove, size: 18),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  '${app.requiredReps}',
+                  style: Theme.of(context).textTheme.headlineLarge,
+                ),
+              ),
+              GestureDetector(
+                onTap: () => vm.incrementReps(app.packageName),
+                child: CircleAvatar(
+                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                  child: const Icon(Icons.add, size: 18),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
