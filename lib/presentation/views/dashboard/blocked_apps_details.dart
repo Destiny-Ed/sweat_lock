@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/core/extensions.dart';
 import 'package:sweat_lock/core/theme.dart';
+import 'package:sweat_lock/data/models/blocked_app.dart';
+import 'package:sweat_lock/presentation/modals/single_list_modal.dart';
 import 'package:sweat_lock/presentation/views/workout/workout_screen.dart';
 import 'package:sweat_lock/presentation/widgets/social_button.dart';
+import 'package:sweat_lock/data/local/hive_service.dart';
 
 class BlockedAppsDetailsScreen extends StatefulWidget {
-  const BlockedAppsDetailsScreen({super.key});
+  final BlockedApp app;
+
+  const BlockedAppsDetailsScreen({super.key, required this.app});
 
   @override
   State<BlockedAppsDetailsScreen> createState() =>
@@ -13,37 +19,73 @@ class BlockedAppsDetailsScreen extends StatefulWidget {
 }
 
 class _BlockedAppsDetailsScreenState extends State<BlockedAppsDetailsScreen> {
+  late BlockedApp _app;
+
+  @override
+  void initState() {
+    super.initState();
+    _app = widget.app;
+  }
+
+  Future<void> _swapExercise() async {
+    await showGenrePickerBottomSheet(
+      context: context,
+      title: 'select workout',
+      items: supportedExercises,
+      currentSelected: _app.exerciseType,
+      onGenreSelected: (workout) async {
+        final updated = _app.copyWith(exerciseType: workout);
+        await HiveService.addBlockedApp(updated);
+        setState(() => _app = updated);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Instagram")),
-
+      appBar: AppBar(title: Text(_app.appName)),
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(10.0),
+              padding: const EdgeInsets.all(10),
               child: Column(
-                spacing: 20,
                 children: [
                   CircleAvatar(
-                    backgroundColor: AppColors.blue,
+                    backgroundColor:
+                        AppColors.primaryGreen.withValues(alpha: 0.2),
                     radius: 40,
-                    child: Icon(Icons.tiktok),
+                    child: Text(
+                      _app.appName.isNotEmpty ? _app.appName[0] : '?',
+                      style: const TextStyle(
+                        fontSize: 28,
+                        color: AppColors.primaryGreen,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-
+                  16.height(),
                   Text(
-                    "25 push-ups".cap,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.headlineLarge!.copyWith(fontSize: 30),
+                    '${_app.requiredReps} ${_app.exerciseType}'.cap,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineLarge
+                        ?.copyWith(fontSize: 28),
                   ),
-
+                  8.height(),
                   Text(
-                    "unlock for 15 minutes".cap,
+                    'unlock for $unlockDurationMinutes minutes'.cap,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
-
+                  8.height(),
+                  Text(
+                    _app.playlistName,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppColors.primaryGreen,
+                        ),
+                  ),
+                  20.height(),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       vertical: 15,
@@ -59,62 +101,42 @@ class _BlockedAppsDetailsScreenState extends State<BlockedAppsDetailsScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Column(
-                              spacing: 10,
                               children: [
-                                Icon(
-                                  Icons.sports,
-                                  color: Theme.of(context).primaryColor,
-                                  size: 40,
+                                Icon(Icons.sports,
+                                    color: AppColors.primaryGreen, size: 40),
+                                Text(
+                                  '${_app.requiredReps} reps'.cap,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineLarge,
                                 ),
                                 Text(
-                                  "25 reps".cap,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.headlineLarge,
-                                ),
-
-                                Text(
-                                  "required".capitalize,
-                                  style: Theme.of(context).textTheme.titleSmall,
+                                  'required'.capitalize,
+                                  style:
+                                      Theme.of(context).textTheme.titleSmall,
                                 ),
                               ],
                             ),
-
                             Column(
-                              spacing: 10,
                               children: [
-                                Icon(
-                                  Icons.alarm,
-                                  color: Theme.of(context).primaryColor,
-                                  size: 40,
+                                Icon(Icons.alarm,
+                                    color: AppColors.primaryGreen, size: 40),
+                                Text(
+                                  '$unlockDurationMinutes mins'.cap,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineLarge,
                                 ),
                                 Text(
-                                  "15 mins".cap,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.headlineLarge,
-                                ),
-
-                                Text(
-                                  "earned".capitalize,
-                                  style: Theme.of(context).textTheme.titleSmall,
+                                  'earned'.capitalize,
+                                  style:
+                                      Theme.of(context).textTheme.titleSmall,
                                 ),
                               ],
                             ),
                           ],
                         ),
                         15.height(),
-                        Slider(
-                          padding: const EdgeInsets.all(0),
-                          value: 50,
-                          max: 100,
-                          inactiveColor: Theme.of(
-                            context,
-                          ).textTheme.headlineSmall!.color!.lighten(),
-                          min: 0,
-                          onChanged: (value) {},
-                        ),
-                        10.height(),
                         Text(
                           "you've got this!".capitalize,
                           style: Theme.of(context).textTheme.titleSmall,
@@ -122,24 +144,29 @@ class _BlockedAppsDetailsScreenState extends State<BlockedAppsDetailsScreen> {
                       ],
                     ),
                   ),
-
                   40.height(),
                   CustomButton(
-                    text: "start workout",
+                    text: 'start workout',
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => WorkoutScreen(),
+                          builder: (_) => WorkoutScreen(
+                            targetReps: _app.requiredReps,
+                            exerciseType: _app.exerciseType,
+                            unlockedAppId: _app.id,
+                            playlistName: _app.playlistName,
+                            playlistUrl: _app.playlistUrl,
+                            appName: _app.appName,
+                          ),
                         ),
                       );
                     },
                   ),
-
                   TextButton(
-                    onPressed: () {},
+                    onPressed: _swapExercise,
                     child: Text(
-                      "swap exercise".cap,
+                      'swap exercise'.cap,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
