@@ -5,8 +5,11 @@ class BlockedApp {
   final String bundleId; // iOS
   final String? iconPath;
   final int requiredReps;
-  final String exerciseType; // push-ups, squats, sit-ups, jumping-jacks
+  final String exerciseType; // push-ups, squats, sit-ups, jumping jacks
   final bool isActive;
+  final String playlistName;
+  final String playlistUrl; // dummy deep link for now
+  final List<String> musicGenres;
 
   BlockedApp({
     required this.id,
@@ -17,6 +20,9 @@ class BlockedApp {
     this.requiredReps = 20,
     this.exerciseType = 'push-ups',
     this.isActive = true,
+    this.playlistName = 'Workout Mix',
+    this.playlistUrl = 'https://open.spotify.com/playlist/37i9dQZF1DX70RN3TfWWJh',
+    this.musicGenres = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -28,6 +34,9 @@ class BlockedApp {
         'requiredReps': requiredReps,
         'exerciseType': exerciseType,
         'isActive': isActive,
+        'playlistName': playlistName,
+        'playlistUrl': playlistUrl,
+        'musicGenres': musicGenres,
       };
 
   factory BlockedApp.fromJson(Map<String, dynamic> json) => BlockedApp(
@@ -39,6 +48,10 @@ class BlockedApp {
         requiredReps: json['requiredReps'] as int? ?? 20,
         exerciseType: json['exerciseType'] as String? ?? 'push-ups',
         isActive: json['isActive'] as bool? ?? true,
+        playlistName: json['playlistName'] as String? ?? 'Workout Mix',
+        playlistUrl: json['playlistUrl'] as String? ??
+            'https://open.spotify.com/playlist/37i9dQZF1DX70RN3TfWWJh',
+        musicGenres: List<String>.from(json['musicGenres'] as List? ?? []),
       );
 
   BlockedApp copyWith({
@@ -50,6 +63,9 @@ class BlockedApp {
     int? requiredReps,
     String? exerciseType,
     bool? isActive,
+    String? playlistName,
+    String? playlistUrl,
+    List<String>? musicGenres,
   }) {
     return BlockedApp(
       id: id ?? this.id,
@@ -60,6 +76,21 @@ class BlockedApp {
       requiredReps: requiredReps ?? this.requiredReps,
       exerciseType: exerciseType ?? this.exerciseType,
       isActive: isActive ?? this.isActive,
+      playlistName: playlistName ?? this.playlistName,
+      playlistUrl: playlistUrl ?? this.playlistUrl,
+      musicGenres: musicGenres ?? this.musicGenres,
     );
   }
+}
+
+/// Suggested social apps for onboarding (Android package names where known)
+class SuggestedApp {
+  final String name;
+  final String packageName;
+  final IconData? icon;
+
+  const SuggestedApp({
+    required this.name,
+    required this.packageName,
+  });
 }
