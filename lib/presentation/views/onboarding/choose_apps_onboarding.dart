@@ -1,4 +1,8 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:sweat_lock/core/extensions.dart';
 import 'package:sweat_lock/core/theme.dart';
@@ -24,7 +28,9 @@ class _ChooseAppsOnboardingState extends State<ChooseAppsOnboarding> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AppsOnboardingProvider>().currentIndex = 1;
+      final vm = context.read<AppsOnboardingProvider>();
+      vm.currentIndex = 1;
+      if (Platform.isAndroid) vm.loadInstalledApps();
     });
   }
 
@@ -36,9 +42,7 @@ class _ChooseAppsOnboardingState extends State<ChooseAppsOnboarding> {
     }
 
     if (vm.currentIndex < vm.maxIndex) {
-      if (vm.currentIndex == 2) {
-        vm.applyGenresToApps();
-      }
+      if (vm.currentIndex == 2) vm.applyGenresToApps();
       _pageController.nextPage(
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeIn,
@@ -46,7 +50,6 @@ class _ChooseAppsOnboardingState extends State<ChooseAppsOnboarding> {
       return;
     }
 
-    // Final step — save to Hive
     setState(() => _saving = true);
     await vm.saveToHive();
     if (mounted) {
@@ -117,16 +120,19 @@ class AppOnboardingStepOne extends StatelessWidget {
       children: [
         Text(
           'choose the apps that ruin your life'.cap,
-          style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 28),
+          style:
+              Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 28),
         ),
         8.height(),
         Text(
-          'Select the apps you want to lock. Empty until you pick some.'
-              .capitalize,
+          Platform.isIOS
+              ? 'Use Screen Time to pick apps. Selection starts empty.'
+              : 'Select from apps installed on your phone. Nothing is selected by default.'
+                  .capitalize,
           style: Theme.of(context).textTheme.titleMedium,
         ),
         16.height(),
-        if (vm.selectedPackages.isEmpty)
+        if (vm.selectedBlockedApps.isEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Text(
@@ -136,65 +142,102 @@ class AppOnboardingStepOne extends StatelessWidget {
                   ),
             ),
           ),
-        Expanded(
-          child: GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisExtent: 64,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
+        if (Platform.isIOS) ...[
+          ElevatedButton.icon(
+            onPressed: vm.iosSelecting ? null : () => vm.pickIosApps(),
+            icon: vm.iosSelecting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.apps),
+            label: Text(
+              vm.iosSelecting ? 'Opening Screen Time…' : 'Select apps (Screen Time)',
             ),
-            itemCount: vm.suggestedApps.length,
-            itemBuilder: (context, index) {
-              final app = vm.suggestedApps[index];
-              final selected = vm.isSuggestedSelected(app);
-              return GestureDetector(
-                onTap: () => vm.toggleSuggestedApp(app),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(50),
-                    color: Theme.of(context).cardColor,
-                    border: selected
-                        ? Border.all(color: AppColors.primaryGreen, width: 2)
-                        : null,
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: selected
-                            ? AppColors.primaryGreen
-                            : Theme.of(context).secondaryHeaderColor,
-                        child: Text(
-                          app.name.characters.first,
-                          style: TextStyle(
-                            color: selected ? Colors.black : Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      8.width(),
-                      Expanded(
-                        child: Text(
-                          app.name,
-                          style: Theme.of(context).textTheme.titleMedium,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Checkbox(
-                        shape: const OvalBorder(),
-                        value: selected,
-                        activeColor: AppColors.primaryGreen,
-                        onChanged: (_) => vm.toggleSuggestedApp(app),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryGreen,
+              foregroundColor: Colors.black,
+              minimumSize: const Size.fromHeight(48),
+            ),
           ),
-        ),
+          12.height(),
+          // Native Label(token) list for real iOS icons/names when available
+          if (vm.selectedBlockedApps.any((a) => a.bundleId.isNotEmpty))
+            SizedBox(
+              height: 120,
+              child: UiKitView(
+                viewType: 'sweatlock/ios_selected_apps',
+                creationParamsCodec: const StandardMessageCodec(),
+                onPlatformViewCreated: (_) {},
+              ),
+            ),
+          Expanded(
+            child: ListView(
+              children: vm.selectedBlockedApps
+                  .map(
+                    (a) => ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            AppColors.primaryGreen.withValues(alpha: 0.2),
+                        child: Text(
+                          a.appName.isNotEmpty ? a.appName[0] : '?',
+                          style: const TextStyle(color: AppColors.primaryGreen),
+                        ),
+                      ),
+                      title: Text(a.appName),
+                      subtitle: Text('${a.requiredReps} ${a.exerciseType}'),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () =>
+                            vm.removeSelected(vm.configKey(a)),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ] else ...[
+          Expanded(
+            child: vm.loadingInstalled
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    itemCount: vm.installedApps.length,
+                    itemBuilder: (context, index) {
+                      final app = vm.installedApps[index];
+                      final package = app.packageName ?? '';
+                      final selected = vm.isKeySelected(package);
+                      return ListTile(
+                        leading: app.icon != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.memory(
+                                  app.icon!,
+                                  width: 40,
+                                  height: 40,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : const CircleAvatar(child: Icon(Icons.apps)),
+                        title: Text(app.name ?? package),
+                        subtitle: Text(
+                          package,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        trailing: Checkbox(
+                          value: selected,
+                          activeColor: AppColors.primaryGreen,
+                          shape: const OvalBorder(),
+                          onChanged: (_) => vm.toggleInstalledApp(app),
+                        ),
+                        onTap: () => vm.toggleInstalledApp(app),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ],
     );
   }
@@ -211,7 +254,8 @@ class AppOnboardingStepTwo extends StatelessWidget {
       children: [
         Text(
           'tune your workout'.cap,
-          style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 28),
+          style:
+              Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 28),
         ),
         8.height(),
         Text(
@@ -278,7 +322,8 @@ class AppOnboardingStepThree extends StatelessWidget {
       children: [
         Text(
           'set your challenges'.cap,
-          style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 28),
+          style:
+              Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 28),
         ),
         8.height(),
         Text(
@@ -315,6 +360,11 @@ class _AppChallengeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final key = vm.configKey(app);
+    final iconBytes = app.packageName.isNotEmpty
+        ? vm.iconForPackage(app.packageName)
+        : null;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -328,29 +378,32 @@ class _AppChallengeCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
-                backgroundColor: AppColors.primaryGreen.withValues(alpha: 0.2),
-                child: Text(
-                  app.appName.characters.first,
-                  style: const TextStyle(
-                    color: AppColors.primaryGreen,
-                    fontWeight: FontWeight.bold,
+              if (iconBytes != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.memory(iconBytes, width: 40, height: 40),
+                )
+              else
+                CircleAvatar(
+                  backgroundColor:
+                      AppColors.primaryGreen.withValues(alpha: 0.2),
+                  child: Text(
+                    app.appName.isNotEmpty ? app.appName[0] : '?',
+                    style: const TextStyle(
+                      color: AppColors.primaryGreen,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
               10.width(),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      app.appName,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    Text(
-                      app.playlistName,
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
+                    Text(app.appName,
+                        style: Theme.of(context).textTheme.titleLarge),
+                    Text(app.playlistName,
+                        style: Theme.of(context).textTheme.titleSmall),
                   ],
                 ),
               ),
@@ -362,7 +415,7 @@ class _AppChallengeCard extends StatelessWidget {
                     items: vm.workouts.map((e) => e.workout).toList(),
                     currentSelected: app.exerciseType,
                     onGenreSelected: (workout) {
-                      vm.setAppExercise(app.packageName, workout);
+                      vm.setAppExercise(key, workout);
                     },
                   );
                 },
@@ -374,11 +427,8 @@ class _AppChallengeCard extends StatelessWidget {
                             color: AppColors.primaryGreen,
                           ),
                     ),
-                    const Icon(
-                      Icons.arrow_drop_down,
-                      color: AppColors.primaryGreen,
-                      size: 32,
-                    ),
+                    const Icon(Icons.arrow_drop_down,
+                        color: AppColors.primaryGreen, size: 32),
                   ],
                 ),
               ),
@@ -387,20 +437,16 @@ class _AppChallengeCard extends StatelessWidget {
           const Divider(height: 24),
           Row(
             children: [
-              Icon(
-                Icons.replay,
-                size: 22,
-                color: Theme.of(context).textTheme.titleMedium?.color,
-              ),
+              Icon(Icons.replay,
+                  size: 22,
+                  color: Theme.of(context).textTheme.titleMedium?.color),
               8.width(),
               Expanded(
-                child: Text(
-                  'reps'.cap,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                child: Text('reps'.cap,
+                    style: Theme.of(context).textTheme.titleMedium),
               ),
               GestureDetector(
-                onTap: () => vm.decrementReps(app.packageName),
+                onTap: () => vm.decrementReps(key),
                 child: CircleAvatar(
                   backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                   child: const Icon(Icons.remove, size: 18),
@@ -408,13 +454,11 @@ class _AppChallengeCard extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  '${app.requiredReps}',
-                  style: Theme.of(context).textTheme.headlineLarge,
-                ),
+                child: Text('${app.requiredReps}',
+                    style: Theme.of(context).textTheme.headlineLarge),
               ),
               GestureDetector(
-                onTap: () => vm.incrementReps(app.packageName),
+                onTap: () => vm.incrementReps(key),
                 child: CircleAvatar(
                   backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                   child: const Icon(Icons.add, size: 18),
