@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:installed_apps/app_info.dart';
 import 'package:installed_apps/installed_apps.dart';
+import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/data/models/blocked_app.dart';
 import 'package:sweat_lock/services/blocking_service.dart';
@@ -58,12 +59,12 @@ class BlockingProvider extends ChangeNotifier {
 
     try {
       _installedApps = await InstalledApps.getInstalledApps(
-        true, // exclude system apps
-        true, // with icon
+        true,
+        true,
       );
-      // Sort alphabetically
       _installedApps.sort(
-        (a, b) => (a.name ?? '').toLowerCase().compareTo((b.name ?? '').toLowerCase()),
+        (a, b) =>
+            (a.name ?? '').toLowerCase().compareTo((b.name ?? '').toLowerCase()),
       );
     } catch (e) {
       debugPrint('loadInstalledApps error: $e');
@@ -82,8 +83,8 @@ class BlockingProvider extends ChangeNotifier {
 
   Future<void> toggleApp({
     required AppInfo app,
-    int requiredReps = 20,
-    String exerciseType = 'push-ups',
+    int requiredReps = defaultReps,
+    String exerciseType = defaultExercise,
   }) async {
     final packageName = app.packageName ?? '';
     if (packageName.isEmpty) return;
@@ -92,17 +93,23 @@ class BlockingProvider extends ChangeNotifier {
         _blockedApps.indexWhere((a) => a.packageName == packageName);
 
     if (existingIndex >= 0) {
-      // Remove
       await HiveService.removeBlockedApp(_blockedApps[existingIndex].id);
     } else {
-      // Add
+      final name = app.name ?? packageName;
+      final genres = HiveService.getMusicGenres();
       final blocked = BlockedApp(
         id: const Uuid().v4(),
-        appName: app.name ?? packageName,
+        appName: name,
         packageName: packageName,
         requiredReps: requiredReps,
         exerciseType: exerciseType,
         isActive: true,
+        playlistName: genres.isNotEmpty
+            ? '${genres.first} Mix · $name'
+            : '$name Workout Mix',
+        playlistUrl:
+            'https://open.spotify.com/playlist/37i9dQZF1DX70RN3TfWWJh',
+        musicGenres: genres,
       );
       await HiveService.addBlockedApp(blocked);
     }
