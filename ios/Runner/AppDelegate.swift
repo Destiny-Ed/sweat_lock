@@ -12,11 +12,22 @@ import SwiftUI
   private var selection = FamilyActivitySelection()
   private var pendingResult: FlutterResult?
 
+  // Shared so platform views can render Label(token)
+  static var sharedSelection = FamilyActivitySelection()
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
+
+    // Register platform view for Label(ApplicationToken) display
+    if let registrar = self.registrar(forPlugin: "SweatLockSelectedApps") {
+      registrar.register(
+        SelectedAppsViewFactory(messenger: registrar.messenger()),
+        withId: "sweatlock/ios_selected_apps"
+      )
+    }
 
     if let controller = window?.rootViewController as? FlutterViewController {
       let channel = FlutterMethodChannel(
@@ -30,20 +41,14 @@ import SwiftUI
         switch call.method {
         case "requestAuthorization":
           self.requestAuth(result: result)
-
         case "selectApps":
           self.presentPicker(from: controller, result: result)
-
         case "getAppUsage":
-          // DeviceActivityReport is extension-based; return empty for main app V1
           result([])
-
         case "resetUsage":
           result(nil)
-
         case "getAuthorizationStatus":
           result(self.authStatusString())
-
         default:
           result(FlutterMethodNotImplemented)
         }
@@ -71,9 +76,7 @@ import SwiftUI
             result(self.center.authorizationStatus == .approved)
           }
         } catch {
-          DispatchQueue.main.async {
-            result(false)
-          }
+          DispatchQueue.main.async { result(false) }
         }
       }
     } else {
@@ -92,6 +95,7 @@ import SwiftUI
         ),
         onComplete: { [weak self] in
           guard let self = self else { return }
+          AppDelegate.sharedSelection = self.selection
           let apps = self.serializeSelection()
           self.pendingResult?(apps)
           self.pendingResult = nil
@@ -118,13 +122,10 @@ import SwiftUI
 
     for token in selection.applicationTokens {
       index += 1
-      // ApplicationToken is opaque — no public bundleId/name in main app.
-      // We store a stable token hash for reference.
       let tokenData = try? PropertyListEncoder().encode(token)
       let tokenBase64 = tokenData?.base64EncodedString() ?? UUID().uuidString
-
       list.append([
-        "id": tokenBase64.prefix(32).description,
+        "id": String(tokenBase64.prefix(32)),
         "appName": "Selected App \(index)",
         "bundleId": tokenBase64,
         "token": tokenBase64,
@@ -133,13 +134,12 @@ import SwiftUI
       ])
     }
 
-    // Also include category tokens as group selections if any
     for token in selection.categoryTokens {
       index += 1
       let tokenData = try? PropertyListEncoder().encode(token)
       let tokenBase64 = tokenData?.base64EncodedString() ?? UUID().uuidString
       list.append([
-        "id": tokenBase64.prefix(32).description,
+        "id": String(tokenBase64.prefix(32)),
         "appName": "Category \(index)",
         "bundleId": tokenBase64,
         "token": tokenBase64,
@@ -151,8 +151,6 @@ import SwiftUI
     return list
   }
 }
-
-// MARK: - SwiftUI Picker Wrapper
 
 @available(iOS 15.0, *)
 struct FamilyActivityPickerView: View {
@@ -174,5 +172,62 @@ struct FamilyActivityPickerView: View {
           }
         }
     }
+  }
+}
+
+// MARK: - Platform view: Label(token) for real app icons/names
+
+class SelectedAppsViewFactory: NSObject, FlutterPlatformViewFactory {
+  private var messenger: FlutterBinaryMessenger
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
+  }
+
+  func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
+    return SelectedAppsPlatformView(frame: frame)
+  }
+
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    return FlutterStandardMessageCodec.sharedInstance()
+  }
+}
+
+class SelectedAppsPlatformView: NSObject, FlutterPlatformView {
+  private var _view: UIView
+
+  init(frame: CGRect) {
+    if #available(iOS 15.0, *) {
+      let host = UIHostingController(rootView: SelectedAppsLabelList())
+      host.view.frame = frame
+      host.view.backgroundColor = .clear
+      _view = host.view
+    } else {
+      _view = UIView(frame: frame)
+    }
+    super.init()
+  }
+
+  func view() -> UIView { _view }
+}
+
+@available(iOS 15.0, *)
+struct SelectedAppsLabelList: View {
+  var body: some View {
+    ScrollView(.horizontal, showsIndicators: false) {
+      HStack(spacing: 12) {
+        ForEach(Array(AppDelegate.sharedSelection.applicationTokens.enumerated()), id: \.offset) { _, token in
+          // Label(token) shows the real system icon + localized name
+          Label(token)
+            .labelStyle(.titleAndIcon)
+            .padding(8)
+            .background(Color.secondary.opacity(0.15))
+            .cornerRadius(12)
+        }
+      }
+      .padding(.horizontal, 4)
+    }
+    .frame(height: 100)
   }
 }
