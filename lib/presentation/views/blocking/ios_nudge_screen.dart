@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sweat_lock/core/constant.dart';
+import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/presentation/views/workout/workout_screen.dart';
 import 'package:sweat_lock/services/ios_nudge_service.dart';
@@ -7,52 +8,75 @@ import 'package:sweat_lock/services/ios_nudge_service.dart';
 /// Full-screen soft nudge shown on iOS when usage limit is reached.
 class IosNudgeScreen extends StatelessWidget {
   final String? bundleId;
+  final String? appName;
   final int usageMinutes;
 
   const IosNudgeScreen({
     super.key,
     this.bundleId,
+    this.appName,
     this.usageMinutes = 25,
   });
 
   @override
   Widget build(BuildContext context) {
     final apps = HiveService.getBlockedApps();
-    final matched = apps.cast<dynamic>().firstWhere(
-          (a) => a.bundleId == bundleId || (bundleId != null && a.bundleId.contains(bundleId!)),
-          orElse: () => null,
-        );
+    dynamic matched;
+    for (final a in apps) {
+      if (bundleId != null &&
+          (a.bundleId == bundleId || a.bundleId.contains(bundleId!))) {
+        matched = a;
+        break;
+      }
+    }
 
-    final appName = matched?.appName ?? 'Your app';
+    final displayName =
+        appName ?? matched?.appName ?? (apps.isNotEmpty ? apps.first.appName : 'This app');
     final reps = matched?.requiredReps ?? defaultReps;
     final exercise = matched?.exerciseType ?? defaultExercise;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F1A),
+      backgroundColor: AppColors.bgGreen,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.timer, size: 80, color: Color(0xFFFF2E63)),
-              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryGreen.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.lock_clock,
+                  size: 72,
+                  color: AppColors.primaryGreen,
+                ),
+              ),
+              const SizedBox(height: 28),
               Text(
-                'Time for a break',
+                '$displayName is limited',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 28,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
               const SizedBox(height: 12),
               Text(
-                "You've used $appName for about $usageMinutes minutes.\nComplete $reps $exercise to continue mindfully.",
+                "You've been on $displayName for about $usageMinutes minutes.\n"
+                'Complete $reps $exercise to continue.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 17, color: Colors.white70, height: 1.4),
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.white70,
+                  height: 1.45,
+                ),
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 40),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -66,7 +90,6 @@ class IosNudgeScreen extends StatelessWidget {
                         ),
                       ),
                     );
-                    // After workout, reset usage tracking for this app
                     if (bundleId != null && bundleId!.isNotEmpty) {
                       await IosNudgeService.instance.resetUsageForApp(bundleId!);
                     }
@@ -78,8 +101,8 @@ class IosNudgeScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF2E63),
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppColors.primaryGreen,
+                    foregroundColor: AppColors.black,
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
@@ -96,10 +119,13 @@ class IosNudgeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'iOS limits real-time blocking.\nThis smart nudge helps you stay consistent.',
+              Text(
+                'Smart nudge · $displayName',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.white38),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.primaryGreen.withValues(alpha: 0.7),
+                ),
               ),
             ],
           ),

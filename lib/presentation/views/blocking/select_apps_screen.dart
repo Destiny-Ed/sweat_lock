@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sweat_lock/core/constant.dart';
+import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/presentation/providers/blocking_provider.dart';
 import 'package:sweat_lock/presentation/views/blocking/ios_nudge_screen.dart';
 import 'package:sweat_lock/services/ios_nudge_service.dart';
@@ -40,7 +41,7 @@ class _SelectAppsScreenState extends State<SelectAppsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Screen Time permission needs a paid Apple Developer account + Family Controls entitlement.',
+              'Screen Time authorization denied or not approved yet. Check Settings → Screen Time.',
             ),
           ),
         );
@@ -53,10 +54,37 @@ class _SelectAppsScreenState extends State<SelectAppsScreen> {
     if (mounted) {
       context.read<BlockingProvider>().loadBlockedApps();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${apps.length} apps selected for monitoring')),
+        SnackBar(
+          content: Text(
+            apps.isEmpty
+                ? 'No apps selected'
+                : '${apps.length} apps selected for monitoring',
+          ),
+        ),
       );
     }
     setState(() => _iosLoading = false);
+  }
+
+  void _previewNudge(BlockingProvider vm) {
+    final iosApps = vm.blockedApps.where((a) => a.bundleId.isNotEmpty).toList();
+    final androidApps = vm.blockedApps;
+    final sample = iosApps.isNotEmpty
+        ? iosApps.first
+        : (androidApps.isNotEmpty ? androidApps.first : null);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => IosNudgeScreen(
+          usageMinutes: 25,
+          appName: sample?.appName ?? 'Instagram',
+          bundleId: sample?.bundleId.isNotEmpty == true
+              ? sample!.bundleId
+              : sample?.packageName,
+        ),
+      ),
+    );
   }
 
   @override
@@ -65,8 +93,10 @@ class _SelectAppsScreenState extends State<SelectAppsScreen> {
       appBar: AppBar(title: const Text('Select Apps to Lock')),
       body: Consumer<BlockingProvider>(
         builder: (context, vm, _) {
-          // -------------------- iOS --------------------
           if (Platform.isIOS) {
+            final monitored =
+                vm.blockedApps.where((a) => a.bundleId.isNotEmpty).toList();
+
             return Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -75,9 +105,9 @@ class _SelectAppsScreenState extends State<SelectAppsScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.12),
+                      color: AppColors.primaryGreen.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.blueAccent),
+                      border: Border.all(color: AppColors.primaryGreen),
                     ),
                     child: const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -91,9 +121,8 @@ class _SelectAppsScreenState extends State<SelectAppsScreen> {
                         ),
                         SizedBox(height: 8),
                         Text(
-                          'Apple does not allow hard real-time app blocking. '
-                          'SweatLock uses usage-based prompts instead: after ~25 minutes on selected apps, '
-                          'you get a workout nudge.',
+                          'Select apps with Screen Time. After heavy usage, '
+                          'SweatLock shows a workout nudge. Hard real-time blocking is not available on iOS.',
                         ),
                       ],
                     ),
@@ -112,43 +141,50 @@ class _SelectAppsScreenState extends State<SelectAppsScreen> {
                       _iosLoading ? 'Opening…' : 'Select apps (Screen Time)',
                     ),
                     style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryGreen,
+                      foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const IosNudgeScreen(usageMinutes: 25),
-                        ),
-                      );
-                    },
+                    onPressed: () => _previewNudge(vm),
                     icon: const Icon(Icons.preview),
-                    label: const Text('Preview nudge screen'),
+                    label: Text(
+                      monitored.isNotEmpty
+                          ? 'Preview nudge (${monitored.first.appName})'
+                          : 'Preview nudge screen',
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primaryGreen,
+                      side: const BorderSide(color: AppColors.primaryGreen),
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Monitored apps (${vm.blockedApps.where((a) => a.bundleId.isNotEmpty).length})',
+                    'Monitored apps (${monitored.length})',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
                   Expanded(
-                    child: vm.blockedApps.where((a) => a.bundleId.isNotEmpty).isEmpty
+                    child: monitored.isEmpty
                         ? const Center(
                             child: Text(
-                              'No iOS apps selected yet.\nRequires Family Controls entitlement.',
+                              'No iOS apps selected yet.\nTap “Select apps (Screen Time)” above.',
                               textAlign: TextAlign.center,
                             ),
                           )
                         : ListView(
-                            children: vm.blockedApps
-                                .where((a) => a.bundleId.isNotEmpty)
+                            children: monitored
                                 .map(
                                   (a) => ListTile(
-                                    leading: const CircleAvatar(
-                                      child: Icon(Icons.phone_iphone),
+                                    leading: CircleAvatar(
+                                      backgroundColor: AppColors.primaryGreen
+                                          .withValues(alpha: 0.2),
+                                      child: const Icon(
+                                        Icons.phone_iphone,
+                                        color: AppColors.primaryGreen,
+                                      ),
                                     ),
                                     title: Text(a.appName),
                                     subtitle: Text(
@@ -169,7 +205,7 @@ class _SelectAppsScreenState extends State<SelectAppsScreen> {
             );
           }
 
-          // -------------------- Android --------------------
+          // Android
           return Column(
             children: [
               if (!vm.accessibilityEnabled)
@@ -251,7 +287,7 @@ class _SelectAppsScreenState extends State<SelectAppsScreen> {
                             ),
                             trailing: Switch(
                               value: isBlocked,
-                              activeColor: Theme.of(context).primaryColor,
+                              activeColor: AppColors.primaryGreen,
                               onChanged: (_) {
                                 vm.toggleApp(
                                   app: app,
