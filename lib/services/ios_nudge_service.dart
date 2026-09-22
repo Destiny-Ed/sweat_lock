@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -9,8 +8,7 @@ import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/data/models/blocked_app.dart';
 
 /// iOS soft-nudge system.
-/// Apple does not allow hard real-time app blocking without special entitlements.
-/// This service tracks selected apps and triggers a workout prompt after usage limits.
+/// Hard real-time blocking is not available; we nudge after usage limit.
 class IosNudgeService {
   static IosNudgeService? _instance;
   static IosNudgeService get instance => _instance ??= IosNudgeService._();
@@ -22,20 +20,21 @@ class IosNudgeService {
   Timer? _usageCheckTimer;
   bool _isMonitoring = false;
 
-  /// Minutes of usage before nudge (default 25)
-  int usageLimitMinutes = 25;
+  /// Testing default: 3 minutes (see [iosUsageLimitMinutes])
+  int usageLimitMinutes = iosUsageLimitMinutes;
 
-  /// Apps currently selected for monitoring (bundle IDs / tokens stored as maps)
+  /// Local fallback tracking when native getAppUsage is empty
+  final Map<String, DateTime> _localSessionStart = {};
+  final Set<String> _nudgedThisSession = {};
+
   List<Map<String, dynamic>> _selectedIosApps = [];
 
   bool get isMonitoring => _isMonitoring;
+  List<Map<String, dynamic>> get selectedIosApps =>
+      List.unmodifiable(_selectedIosApps);
 
-  List<Map<String, dynamic>> get selectedIosApps => List.unmodifiable(_selectedIosApps);
-
-  /// Load previously saved iOS selections from Hive settings
   void loadSavedSelections() {
     try {
-      // Reuse settings box via HiveService helpers if needed later
       final apps = HiveService.getBlockedApps()
           .where((a) => a.bundleId.isNotEmpty)
           .map((a) => {
@@ -47,51 +46,72 @@ class IosNudgeService {
               })
           .toList();
       _selectedIosApps = apps;
+
+      // Start local session clocks for testing fallback
+      final now = DateTime.now();
+      for (final a in apps) {
+        final id = a['bundleId']?.toString() ?? '';
+        if (id.isNotEmpty && !_localSessionStart.containsKey(id)) {
+          _localSessionStart[id] = now;
+        }
+      }
     } catch (e) {
       debugPrint('loadSavedSelections error: $e');
     }
   }
 
-  /// Request Screen Time / Family Controls authorization (iOS 15+)
   Future<bool> requestAuthorization() async {
     if (!Platform.isIOS) return false;
     try {
       final result = await _channel.invokeMethod<bool>('requestAuthorization');
       return result ?? false;
     } on PlatformException catch (e) {
-      log('requestAuthorization error: ${e.message}');
+      debugPrint('requestAuthorization error: ${e.message}');
       return false;
     } catch (e) {
-      log('requestAuthorization error: $e');
+      debugPrint('requestAuthorization error: $e');
       return false;
     }
   }
 
-  
-
-  /// Present FamilyActivityPicker and return selected app tokens/info
   Future<List<Map<String, dynamic>>> selectApps() async {
     if (!Platform.isIOS) return [];
     try {
       final result = await _channel.invokeMethod<List>('selectApps');
       if (result == null) return [];
 
-      final apps = result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      final apps =
+          result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       _selectedIosApps = apps;
 
-      // Persist as BlockedApp entries with bundleId
+      // Replace iOS-token apps in Hive (keep Android package apps)
+      final existing = HiveService.getBlockedApps()
+          .where((a) => a.packageName.isNotEmpty && a.bundleId.isEmpty)
+          .toList();
+
+      final now = DateTime.now();
       for (final app in apps) {
+        final bundleId =
+            app['bundleId']?.toString() ?? app['token']?.toString() ?? '';
         final blocked = BlockedApp(
-          id: app['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+          id: app['id']?.toString() ??
+              DateTime.now().millisecondsSinceEpoch.toString(),
           appName: app['appName']?.toString() ?? 'Selected App',
           packageName: '',
-          bundleId: app['bundleId']?.toString() ?? app['token']?.toString() ?? '',
+          bundleId: bundleId,
           requiredReps: app['requiredReps'] as int? ?? defaultReps,
           exerciseType: app['exerciseType']?.toString() ?? defaultExercise,
+          playlistName:
+              '${app['appName'] ?? 'App'} Workout Mix',
         );
-        await HiveService.addBlockedApp(blocked);
+        existing.removeWhere((a) => a.bundleId == bundleId);
+        existing.add(blocked);
+        if (bundleId.isNotEmpty) {
+          _localSessionStart[bundleId] = now;
+        }
       }
 
+      await HiveService.saveBlockedApps(existing);
       return apps;
     } on PlatformException catch (e) {
       debugPrint('selectApps error: ${e.message}');
@@ -102,21 +122,28 @@ class IosNudgeService {
     }
   }
 
-  /// Start periodic usage checks (soft monitoring)
-  void startMonitoring({int checkIntervalMinutes = 5}) {
+  void startMonitoring({int? checkIntervalMinutes}) {
     if (!Platform.isIOS || _isMonitoring) return;
     loadSavedSelections();
     _isMonitoring = true;
 
+    final interval = checkIntervalMinutes ?? iosUsageCheckIntervalMinutes;
+
     _usageCheckTimer?.cancel();
     _usageCheckTimer = Timer.periodic(
-      Duration(minutes: checkIntervalMinutes),
+      Duration(minutes: interval),
       (_) => _checkUsageAndNudge(),
     );
 
-    // Also check once immediately
+    // Also tick every 30s for faster testing feedback
+    Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_isMonitoring) _checkUsageAndNudge();
+    });
+
     _checkUsageAndNudge();
-    debugPrint('IosNudgeService monitoring started');
+    debugPrint(
+      'IosNudgeService monitoring started (limit: $usageLimitMinutes min)',
+    );
   }
 
   void stopMonitoring() {
@@ -125,42 +152,58 @@ class IosNudgeService {
     _isMonitoring = false;
   }
 
-  /// Query native side for approximate usage of monitored apps
   Future<void> _checkUsageAndNudge() async {
-    if (_selectedIosApps.isEmpty) return;
+    if (_selectedIosApps.isEmpty) {
+      loadSavedSelections();
+      if (_selectedIosApps.isEmpty) return;
+    }
 
+    // 1) Try native usage API
     try {
       final usageList = await _channel.invokeMethod<List>('getAppUsage');
-      if (usageList == null) return;
-
-      for (final item in usageList) {
-        final map = Map<String, dynamic>.from(item as Map);
-        final minutes = (map['minutes'] as num?)?.toInt() ?? 0;
-        final bundleId = map['bundleId']?.toString() ?? '';
-
-        if (minutes >= usageLimitMinutes) {
-          // Signal that a nudge should be shown
-          // UI layer listens via a simple callback or stream
-          _onNudgeNeeded?.call(bundleId, minutes);
-          break;
+      if (usageList != null && usageList.isNotEmpty) {
+        for (final item in usageList) {
+          final map = Map<String, dynamic>.from(item as Map);
+          final minutes = (map['minutes'] as num?)?.toInt() ?? 0;
+          final bundleId = map['bundleId']?.toString() ?? '';
+          if (minutes >= usageLimitMinutes &&
+              !_nudgedThisSession.contains(bundleId)) {
+            _nudgedThisSession.add(bundleId);
+            _onNudgeNeeded?.call(bundleId, minutes);
+            return;
+          }
         }
+        return;
       }
-    } on PlatformException catch (e) {
-      // Native not implemented yet — fall back to manual nudge trigger
-      debugPrint('getAppUsage not available: ${e.message}');
     } catch (e) {
-      debugPrint('_checkUsageAndNudge error: $e');
+      debugPrint('getAppUsage unavailable, using local timer: $e');
+    }
+
+    // 2) Local fallback timer (for testing when native usage is empty)
+    final now = DateTime.now();
+    for (final app in _selectedIosApps) {
+      final bundleId = app['bundleId']?.toString() ?? '';
+      if (bundleId.isEmpty) continue;
+      final start = _localSessionStart[bundleId] ?? now;
+      final minutes = now.difference(start).inMinutes;
+      if (minutes >= usageLimitMinutes &&
+          !_nudgedThisSession.contains(bundleId)) {
+        _nudgedThisSession.add(bundleId);
+        debugPrint(
+          'Local nudge for $bundleId after $minutes min (limit $usageLimitMinutes)',
+        );
+        _onNudgeNeeded?.call(bundleId, minutes);
+        return;
+      }
     }
   }
 
-  /// Callback when usage limit is reached
   void Function(String bundleId, int minutes)? _onNudgeNeeded;
 
   void setNudgeCallback(void Function(String bundleId, int minutes)? cb) {
     _onNudgeNeeded = cb;
   }
 
-  /// Manual trigger (useful for testing and when native usage API is limited)
   void triggerManualNudge({String? bundleId}) {
     final id = bundleId ??
         (_selectedIosApps.isNotEmpty
@@ -169,8 +212,9 @@ class IosNudgeService {
     _onNudgeNeeded?.call(id, usageLimitMinutes);
   }
 
-  /// After workout completed — reset local usage window for that app
   Future<void> resetUsageForApp(String bundleId) async {
+    _localSessionStart[bundleId] = DateTime.now();
+    _nudgedThisSession.remove(bundleId);
     try {
       await _channel.invokeMethod('resetUsage', {'bundleId': bundleId});
     } catch (e) {
