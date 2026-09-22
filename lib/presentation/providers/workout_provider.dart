@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
-import 'package:sweat_lock/data/models/user_progress.dart';
+import 'package:sweat_lock/data/models/blocked_app.dart';
 import 'package:sweat_lock/data/models/workout_session.dart';
 import 'package:uuid/uuid.dart';
 
@@ -34,6 +34,16 @@ class WorkoutProvider extends ChangeNotifier {
   String _feedback = 'Get into position';
   String get feedback => _feedback;
 
+  String _playlistName = 'Workout Mix';
+  String get playlistName => _playlistName;
+
+  String _playlistUrl =
+      'https://open.spotify.com/playlist/37i9dQZF1DX70RN3TfWWJh';
+  String get playlistUrl => _playlistUrl;
+
+  String? _appName;
+  String? get appName => _appName;
+
   bool _isDown = false;
   String? _sessionId;
   String? _unlockedAppId;
@@ -44,14 +54,37 @@ class WorkoutProvider extends ChangeNotifier {
     int? targetReps,
     String? exerciseType,
     String? unlockedAppId,
+    String? playlistName,
+    String? playlistUrl,
+    String? appName,
   }) async {
     _isLoading = true;
     _currentReps = 0;
     _isDown = false;
     _feedback = 'Get into position';
-    _targetReps = targetReps ?? HiveService.getDefaultReps();
-    _exerciseType = exerciseType ?? HiveService.getDefaultExercise();
     _unlockedAppId = unlockedAppId;
+
+    // Resolve from saved BlockedApp when possible
+    BlockedApp? blocked;
+    if (unlockedAppId != null) {
+      final apps = HiveService.getBlockedApps();
+      for (final a in apps) {
+        if (a.id == unlockedAppId) {
+          blocked = a;
+          break;
+        }
+      }
+    }
+
+    _targetReps = targetReps ?? blocked?.requiredReps ?? HiveService.getDefaultReps();
+    _exerciseType =
+        exerciseType ?? blocked?.exerciseType ?? HiveService.getDefaultExercise();
+    _playlistName = playlistName ?? blocked?.playlistName ?? 'Workout Mix';
+    _playlistUrl = playlistUrl ??
+        blocked?.playlistUrl ??
+        'https://open.spotify.com/playlist/37i9dQZF1DX70RN3TfWWJh';
+    _appName = appName ?? blocked?.appName;
+
     _sessionId = const Uuid().v4();
     _startedAt = DateTime.now();
     notifyListeners();
@@ -111,7 +144,6 @@ class WorkoutProvider extends ChangeNotifier {
       }
     } catch (_) {}
 
-    // Save session
     final session = WorkoutSession(
       id: _sessionId ?? const Uuid().v4(),
       exerciseType: _exerciseType,
@@ -211,19 +243,15 @@ class WorkoutProvider extends ChangeNotifier {
     final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
     final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
 
-    if (leftShoulder == null ||
-        rightShoulder == null ||
-        leftElbow == null ||
-        rightElbow == null ||
-        leftWrist == null ||
-        rightWrist == null) {
+    if ([leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist]
+        .contains(null)) {
       _feedback = 'Make sure your upper body is visible';
       notifyListeners();
       return;
     }
 
-    final leftAngle = _angle(leftShoulder, leftElbow, leftWrist);
-    final rightAngle = _angle(rightShoulder, rightElbow, rightWrist);
+    final leftAngle = _angle(leftShoulder!, leftElbow!, leftWrist!);
+    final rightAngle = _angle(rightShoulder!, rightElbow!, rightWrist!);
     final avgAngle = (leftAngle + rightAngle) / 2;
 
     if (avgAngle < 100 && !_isDown) {
@@ -235,10 +263,7 @@ class WorkoutProvider extends ChangeNotifier {
       _currentReps++;
       _feedback = _currentReps >= _targetReps ? 'Great job!' : 'Good rep!';
       notifyListeners();
-
-      if (_currentReps >= _targetReps) {
-        stopWorkout(completed: true);
-      }
+      if (_currentReps >= _targetReps) stopWorkout(completed: true);
     }
   }
 
@@ -250,19 +275,15 @@ class WorkoutProvider extends ChangeNotifier {
     final leftAnkle = pose.landmarks[PoseLandmarkType.leftAnkle];
     final rightAnkle = pose.landmarks[PoseLandmarkType.rightAnkle];
 
-    if (leftHip == null ||
-        rightHip == null ||
-        leftKnee == null ||
-        rightKnee == null ||
-        leftAnkle == null ||
-        rightAnkle == null) {
+    if ([leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle]
+        .contains(null)) {
       _feedback = 'Make sure your full body is visible';
       notifyListeners();
       return;
     }
 
-    final leftAngle = _angle(leftHip, leftKnee, leftAnkle);
-    final rightAngle = _angle(rightHip, rightKnee, rightAnkle);
+    final leftAngle = _angle(leftHip!, leftKnee!, leftAnkle!);
+    final rightAngle = _angle(rightHip!, rightKnee!, rightAnkle!);
     final avgAngle = (leftAngle + rightAngle) / 2;
 
     if (avgAngle < 100 && !_isDown) {
@@ -274,10 +295,7 @@ class WorkoutProvider extends ChangeNotifier {
       _currentReps++;
       _feedback = _currentReps >= _targetReps ? 'Great job!' : 'Good squat!';
       notifyListeners();
-
-      if (_currentReps >= _targetReps) {
-        stopWorkout(completed: true);
-      }
+      if (_currentReps >= _targetReps) stopWorkout(completed: true);
     }
   }
 
@@ -287,20 +305,16 @@ class WorkoutProvider extends ChangeNotifier {
     final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
     final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
 
-    if (leftShoulder == null ||
-        rightShoulder == null ||
-        leftHip == null ||
-        rightHip == null) {
+    if ([leftShoulder, rightShoulder, leftHip, rightHip].contains(null)) {
       _feedback = 'Lie down and keep body visible';
       notifyListeners();
       return;
     }
 
-    final shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
-    final hipY = (leftHip.y + rightHip.y) / 2;
+    final shoulderY = (leftShoulder!.y + rightShoulder!.y) / 2;
+    final hipY = (leftHip!.y + rightHip!.y) / 2;
     final diff = (shoulderY - hipY).abs();
 
-    // Simple vertical distance heuristic
     if (diff < 40 && !_isDown) {
       _isDown = true;
       _feedback = 'Curl up!';
@@ -310,10 +324,7 @@ class WorkoutProvider extends ChangeNotifier {
       _currentReps++;
       _feedback = _currentReps >= _targetReps ? 'Great job!' : 'Good sit-up!';
       notifyListeners();
-
-      if (_currentReps >= _targetReps) {
-        stopWorkout(completed: true);
-      }
+      if (_currentReps >= _targetReps) stopWorkout(completed: true);
     }
   }
 
@@ -323,17 +334,14 @@ class WorkoutProvider extends ChangeNotifier {
     final leftAnkle = pose.landmarks[PoseLandmarkType.leftAnkle];
     final rightAnkle = pose.landmarks[PoseLandmarkType.rightAnkle];
 
-    if (leftWrist == null ||
-        rightWrist == null ||
-        leftAnkle == null ||
-        rightAnkle == null) {
+    if ([leftWrist, rightWrist, leftAnkle, rightAnkle].contains(null)) {
       _feedback = 'Make sure full body is visible';
       notifyListeners();
       return;
     }
 
-    final armSpread = (leftWrist.x - rightWrist.x).abs();
-    final legSpread = (leftAnkle.x - rightAnkle.x).abs();
+    final armSpread = (leftWrist!.x - rightWrist!.x).abs();
+    final legSpread = (leftAnkle!.x - rightAnkle!.x).abs();
 
     if (armSpread > 120 && legSpread > 80 && !_isDown) {
       _isDown = true;
@@ -345,10 +353,7 @@ class WorkoutProvider extends ChangeNotifier {
       _feedback =
           _currentReps >= _targetReps ? 'Great job!' : 'Good jumping jack!';
       notifyListeners();
-
-      if (_currentReps >= _targetReps) {
-        stopWorkout(completed: true);
-      }
+      if (_currentReps >= _targetReps) stopWorkout(completed: true);
     }
   }
 
@@ -367,20 +372,13 @@ class WorkoutProvider extends ChangeNotifier {
     final camera = controller!.description;
     final sensorOrientation = camera.sensorOrientation;
 
-    InputImageRotation? rotation;
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      rotation = InputImageRotationValue.fromRawValue(sensorOrientation);
-    } else if (defaultTargetPlatform == TargetPlatform.android) {
-      rotation = InputImageRotationValue.fromRawValue(sensorOrientation);
-    }
+    final rotation = InputImageRotationValue.fromRawValue(sensorOrientation);
     if (rotation == null) return null;
 
     final format = InputImageFormatValue.fromRawValue(image.format.raw);
-    if (format == null) return null;
+    if (format == null || image.planes.isEmpty) return null;
 
-    if (image.planes.isEmpty) return null;
     final plane = image.planes.first;
-
     return InputImage.fromBytes(
       bytes: plane.bytes,
       metadata: InputImageMetadata(
