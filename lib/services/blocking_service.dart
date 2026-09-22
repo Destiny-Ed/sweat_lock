@@ -26,6 +26,15 @@ class BlockingService {
 
   bool get isListening => _isListening;
 
+  /// Convenience: check permission and start if granted
+  Future<void> checkAndStart() async {
+    if (!Platform.isAndroid) return;
+    final enabled = await isAccessibilityEnabled();
+    if (enabled) {
+      await startListening();
+    }
+  }
+
   /// Check if accessibility permission is granted
   Future<bool> isAccessibilityEnabled() async {
     if (!Platform.isAndroid) return false;
@@ -86,18 +95,18 @@ class BlockingService {
     // Only care about window state changes (app opened / focused)
     if (event.eventType != EventType.typeWindowStateChanged) return;
 
-    final blockedApps = HiveService.getBlockedApps()
-        .where((a) => a.isActive)
-        .toList();
+    final blockedApps =
+        HiveService.getBlockedApps().where((a) => a.isActive).toList();
 
-    final matched = blockedApps.cast<BlockedApp?>().firstWhere(
-          (a) => a!.packageName == packageName ||
-              packageName.contains(a.packageName),
-          orElse: () => null,
-        );
+    BlockedApp? matched;
+    for (final a in blockedApps) {
+      if (a.packageName == packageName || packageName.contains(a.packageName)) {
+        matched = a;
+        break;
+      }
+    }
 
     if (matched == null) {
-      // Not a blocked app — hide overlay if showing
       if (_currentlyBlockedPackage != null) {
         await hideBlockOverlay();
         _currentlyBlockedPackage = null;
@@ -108,10 +117,9 @@ class BlockingService {
     // Check temporary unlock
     final unlockExpiry = _temporaryUnlocks[packageName];
     if (unlockExpiry != null && DateTime.now().isBefore(unlockExpiry)) {
-      return; // Still unlocked
+      return;
     }
 
-    // Block it
     _currentlyBlockedPackage = packageName;
     await showBlockOverlay();
   }
