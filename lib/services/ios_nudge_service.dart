@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -58,10 +59,10 @@ class IosNudgeService {
       final result = await _channel.invokeMethod<bool>('requestAuthorization');
       return result ?? false;
     } on PlatformException catch (e) {
-      debugPrint('requestAuthorization error: ${e.message}');
+      log('requestAuthorization error: ${e.message}');
       return false;
     } catch (e) {
-      debugPrint('requestAuthorization error: $e');
+      log('requestAuthorization error: $e');
       return false;
     }
   }
