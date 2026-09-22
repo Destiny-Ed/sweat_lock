@@ -21,7 +21,8 @@ class BlockedApp {
     this.exerciseType = 'push-ups',
     this.isActive = true,
     this.playlistName = 'Workout Mix',
-    this.playlistUrl = 'https://open.spotify.com/playlist/37i9dQZF1DX70RN3TfWWJh',
+    this.playlistUrl =
+        'https://open.spotify.com/playlist/37i9dQZF1DX70RN3TfWWJh',
     this.musicGenres = const [],
   });
 
@@ -87,7 +88,6 @@ class BlockedApp {
 class SuggestedApp {
   final String name;
   final String packageName;
-  final IconData? icon;
 
   const SuggestedApp({
     required this.name,
