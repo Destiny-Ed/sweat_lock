@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sweat_lock/core/extensions.dart';
+import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/presentation/providers/blocking_provider.dart';
 import 'package:sweat_lock/presentation/views/blocking/select_apps_screen.dart';
@@ -111,7 +112,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) =>
-                                      const BlockedAppsDetailsScreen(),
+                                      BlockedAppsDetailsScreen(app: app),
                                 ),
                               );
                             },
@@ -134,9 +135,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       Theme.of(context).textTheme.titleSmall,
                                 ),
                                 leading: CircleAvatar(
-                                  backgroundColor: Theme.of(context)
-                                      .secondaryHeaderColor,
-                                  child: const Icon(Icons.apps),
+                                  backgroundColor: AppColors.primaryGreen
+                                      .withValues(alpha: 0.2),
+                                  child: Text(
+                                    app.appName.isNotEmpty ? app.appName[0] : '?',
+                                    style: const TextStyle(
+                                      color: AppColors.primaryGreen,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                                 trailing: Icon(
                                   Icons.lock,
