@@ -1,21 +1,23 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:sweat_lock/core/extensions.dart';
+import 'package:sweat_lock/core/theme.dart';
 
 class StatsBarChart extends StatefulWidget {
-  const StatsBarChart({super.key});
+  final List<double>? weeklyValues;
+
+  const StatsBarChart({super.key, this.weeklyValues});
 
   List<Color> get availableColors => const <Color>[
-    Colors.purple,
-    Colors.yellow,
-    Colors.blue,
-    Colors.orange,
-    Colors.pink,
-    Colors.red,
-  ];
+        Colors.purple,
+        Colors.yellow,
+        Colors.blue,
+        Colors.orange,
+        Colors.pink,
+        Colors.red,
+      ];
 
   @override
   State<StatefulWidget> createState() => StatsBarChartState();
@@ -23,14 +25,26 @@ class StatsBarChart extends StatefulWidget {
 
 class StatsBarChartState extends State<StatsBarChart> {
   final Duration animDuration = const Duration(milliseconds: 250);
-
   int touchedIndex = -1;
-
   bool isPlaying = false;
 
-  final Color barBackgroundColor = Colors.white.darken().withValues(alpha: 0.3);
-  final Color barColor = Colors.green;
+  final Color barBackgroundColor =
+      Colors.white.darken().withValues(alpha: 0.3);
+  final Color barColor = AppColors.primaryGreen;
   final Color touchedBarColor = Colors.white;
+
+  List<double> get _values {
+    final v = widget.weeklyValues;
+    if (v != null && v.length == 7) return v;
+    return List<double>.filled(7, 0);
+  }
+
+  double get _weekTotal => _values.fold(0, (a, b) => a + b);
+
+  double get _maxY {
+    final m = _values.fold<double>(0, (a, b) => a > b ? a : b);
+    return m < 10 ? 20 : m * 1.2;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,28 +61,13 @@ class StatsBarChartState extends State<StatsBarChart> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "This week".cap,
+                      'Last 7 days'.cap,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     10.height(),
                     Text(
-                      "254 reps",
+                      '${_weekTotal.round()} reps',
                       style: Theme.of(context).textTheme.headlineLarge,
-                    ),
-                    10.height(),
-
-                    Row(
-                      children: [
-                        Text(
-                          "vs. last week ",
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        Text(
-                          "+15%",
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(color: Theme.of(context).primaryColor),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -90,14 +89,12 @@ class StatsBarChartState extends State<StatsBarChart> {
               child: IconButton(
                 icon: Icon(
                   isPlaying ? Icons.pause : Icons.play_arrow,
-                  color: Colors.green,
+                  color: AppColors.primaryGreen,
                 ),
                 onPressed: () {
                   setState(() {
                     isPlaying = !isPlaying;
-                    if (isPlaying) {
-                      refreshState();
-                    }
+                    if (isPlaying) refreshState();
                   });
                 },
               ),
@@ -112,94 +109,65 @@ class StatsBarChartState extends State<StatsBarChart> {
     int x,
     double y, {
     bool isTouched = false,
-    Color? barColor = Colors.green,
+    Color? barColor,
     double width = 22,
-    List<int> showTooltips = const [],
   }) {
-    barColor ??= barColor;
     return BarChartGroupData(
       x: x,
       barRods: [
         BarChartRodData(
           toY: isTouched ? y + 1 : y,
-          color: isTouched ? touchedBarColor : barColor,
+          color: isTouched ? touchedBarColor : (barColor ?? this.barColor),
           width: width,
           borderSide: isTouched
               ? BorderSide(color: touchedBarColor.darken(80))
               : const BorderSide(color: Colors.white, width: 0),
           backDrawRodData: BackgroundBarChartRodData(
             show: true,
-            toY: 20,
+            toY: _maxY,
             color: barBackgroundColor,
           ),
         ),
       ],
-      showingTooltipIndicators: showTooltips,
     );
   }
 
   List<BarChartGroupData> showingGroups() => List.generate(
-    7,
-    (i) => switch (i) {
-      0 => makeGroupData(0, 5, isTouched: i == touchedIndex),
-      1 => makeGroupData(1, 6.5, isTouched: i == touchedIndex),
-      2 => makeGroupData(2, 5, isTouched: i == touchedIndex),
-      3 => makeGroupData(3, 7.5, isTouched: i == touchedIndex),
-      4 => makeGroupData(4, 9, isTouched: i == touchedIndex),
-      5 => makeGroupData(5, 11.5, isTouched: i == touchedIndex),
-      6 => makeGroupData(6, 6.5, isTouched: i == touchedIndex),
-      _ => throw Error(),
-    },
-  );
+        7,
+        (i) => makeGroupData(i, _values[i], isTouched: i == touchedIndex),
+      );
 
   BarChartData mainBarData() {
     return BarChartData(
+      maxY: _maxY,
       barTouchData: BarTouchData(
         enabled: true,
         touchTooltipData: BarTouchTooltipData(
           getTooltipColor: (_) => Theme.of(context).cardColor,
-          tooltipHorizontalAlignment: FLHorizontalAlignment.right,
-          tooltipMargin: -10,
           getTooltipItem: (group, groupIndex, rod, rodIndex) {
-            String weekDay = switch (group.x) {
-              0 => 'Monday',
-              1 => 'Tuesday',
-              2 => 'Wednesday',
-              3 => 'Thursday',
-              4 => 'Friday',
-              5 => 'Saturday',
-              6 => 'Sunday',
-              _ => throw Error(),
-            };
+            const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            final day = group.x >= 0 && group.x < 7 ? labels[group.x] : '';
             return BarTooltipItem(
-              '$weekDay\n',
+              '$day\n${rod.toY.round()} reps',
               Theme.of(context).textTheme.titleMedium!,
-              children: <TextSpan>[
-                TextSpan(
-                  text: ((rod.toY - 1).toStringAsFixed(1)).toString(),
-                  style: Theme.of(context).textTheme.titleMedium!,
-                ),
-              ],
             );
           },
         ),
         touchCallback: (FlTouchEvent event, barTouchResponse) {
           setState(() {
             if (!event.isInterestedForInteractions ||
-                barTouchResponse == null ||
-                barTouchResponse.spot == null) {
+                barTouchResponse?.spot == null) {
               touchedIndex = -1;
               return;
             }
-            touchedIndex = barTouchResponse.spot!.touchedBarGroupIndex;
+            touchedIndex = barTouchResponse!.spot!.touchedBarGroupIndex;
           });
         },
       ),
       titlesData: FlTitlesData(
         show: true,
-        rightTitles: const AxisTitles(
-          sideTitles: SideTitles(showTitles: false),
-        ),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
@@ -208,7 +176,8 @@ class StatsBarChartState extends State<StatsBarChart> {
             reservedSize: 38,
           ),
         ),
-        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        leftTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
       ),
       borderData: FlBorderData(show: false),
       barGroups: showingGroups(),
@@ -217,17 +186,10 @@ class StatsBarChartState extends State<StatsBarChart> {
   }
 
   Widget getTitles(double value, TitleMeta meta) {
-    TextStyle style = Theme.of(context).textTheme.titleMedium!;
-    String text = switch (value.toInt()) {
-      0 => 'Mon',
-      1 => 'Tue',
-      2 => 'Wed',
-      3 => 'Thu',
-      4 => 'Fri',
-      5 => 'Sat',
-      6 => 'Sun',
-      _ => '',
-    };
+    final style = Theme.of(context).textTheme.titleMedium!;
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final text =
+        value.toInt() >= 0 && value.toInt() < 7 ? labels[value.toInt()] : '';
     return SideTitleWidget(
       meta: meta,
       space: 16,
@@ -247,11 +209,11 @@ class StatsBarChartState extends State<StatsBarChart> {
             reservedSize: 38,
           ),
         ),
-        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        leftTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        rightTitles: const AxisTitles(
-          sideTitles: SideTitles(showTitles: false),
-        ),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
       ),
       borderData: FlBorderData(show: false),
       barGroups: List.generate(
@@ -259,21 +221,19 @@ class StatsBarChartState extends State<StatsBarChart> {
         (i) => makeGroupData(
           i,
           Random().nextInt(15).toDouble() + 6,
-          barColor: widget
-              .availableColors[Random().nextInt(widget.availableColors.length)],
+          barColor: widget.availableColors[
+              Random().nextInt(widget.availableColors.length)],
         ),
       ),
       gridData: const FlGridData(show: false),
     );
   }
 
-  Future<dynamic> refreshState() async {
+  Future<void> refreshState() async {
     setState(() {});
-    await Future<dynamic>.delayed(
+    await Future<void>.delayed(
       animDuration + const Duration(milliseconds: 50),
     );
-    if (isPlaying) {
-      await refreshState();
-    }
+    if (isPlaying) await refreshState();
   }
 }
