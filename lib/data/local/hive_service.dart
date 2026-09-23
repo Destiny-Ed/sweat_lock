@@ -1,4 +1,5 @@
 import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/data/models/blocked_app.dart';
 import 'package:sweat_lock/data/models/user_progress.dart';
 import 'package:sweat_lock/data/models/workout_session.dart';
@@ -112,5 +113,69 @@ class HiveService {
   static List<String> getMusicGenres() {
     final raw = _settings.get('music_genres', defaultValue: <String>[]);
     return List<String>.from(raw);
+  }
+
+  /// 'immediate' | 'timed'
+  static Future<void> setBlockMode(String mode) async {
+    await _settings.put('block_mode', mode);
+  }
+
+  static String getBlockMode() {
+    return _settings.get('block_mode', defaultValue: 'timed') as String;
+  }
+
+  static Future<void> setFreeMinutes(int minutes) async {
+    await _settings.put('free_minutes', minutes.clamp(1, 120));
+  }
+
+  static int getFreeMinutes() {
+    return _settings.get('free_minutes', defaultValue: iosUsageLimitMinutes)
+        as int;
+  }
+
+  static Future<void> setWarningMinutes(int minutes) async {
+    await _settings.put('warning_minutes', minutes.clamp(1, 30));
+  }
+
+  static int getWarningMinutes() {
+    return _settings.get(
+      'warning_minutes',
+      defaultValue: iosWarningBeforeBlockMinutes,
+    ) as int;
+  }
+
+  static Future<void> setNotificationsEnabled(bool value) async {
+    await _settings.put('notifications_enabled', value);
+  }
+
+  static bool getNotificationsEnabled() {
+    return _settings.get('notifications_enabled', defaultValue: true) as bool;
+  }
+
+  static Future<void> setPreventUninstall(bool value) async {
+    await _settings.put('prevent_uninstall', value);
+  }
+
+  static bool getPreventUninstall() {
+    return _settings.get('prevent_uninstall', defaultValue: false) as bool;
+  }
+
+  static Future<void> setUnlockDurationMinutes(int minutes) async {
+    await _settings.put('unlock_duration', minutes.clamp(5, 180));
+  }
+
+  static int getUnlockDurationMinutes() {
+    return _settings.get(
+      'unlock_duration',
+      defaultValue: unlockDurationMinutes,
+    ) as int;
+  }
+
+  /// Clear user session data on logout (keeps nothing sensitive locally)
+  static Future<void> logout() async {
+    await _settings.put('onboarding_complete', false);
+    await _blockedApps.clear();
+    await _sessions.clear();
+    await _progress.clear();
   }
 }
