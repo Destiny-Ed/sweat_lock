@@ -21,7 +21,8 @@ import UserNotifications
   private let sessionStartKey = "sweatlock_session_start"
   private let unlockUntilKey = "sweatlock_unlock_until"
   private let modeKey = "sweatlock_block_mode"
-  private let appGroupId = "group.sweatlock.shared"
+  /// Must match Runner.entitlements + all extension App Groups
+  private let appGroupId = "group.com.sweat.lock.shield"
 
   private var sharedDefaults: UserDefaults? {
     UserDefaults(suiteName: appGroupId)
@@ -268,6 +269,7 @@ import UserNotifications
     store.shield.applications = nil
     store.shield.applicationCategories = nil
     store.shield.webDomains = nil
+    sharedDefaults?.set(false, forKey: "force_shield")
     print("SweatLock: shield CLEARED")
   }
 
@@ -279,6 +281,7 @@ import UserNotifications
   ) {
     UserDefaults.standard.set(mode, forKey: modeKey)
     sharedDefaults?.set(mode, forKey: modeKey)
+    sharedDefaults?.set(appName, forKey: "display_app_name")
     clearShield()
     cancelTimedLock()
     UserDefaults.standard.removeObject(forKey: unlockUntilKey)
@@ -324,6 +327,7 @@ import UserNotifications
   ) {
     cancelTimedLock()
     loadPersistedSelection()
+    persistSelection()
 
     UserDefaults.standard.set(mode, forKey: modeKey)
     sharedDefaults?.set(mode, forKey: modeKey)
@@ -338,7 +342,9 @@ import UserNotifications
     UserDefaults.standard.removeObject(forKey: unlockUntilKey)
     sharedDefaults?.set(now.timeIntervalSince1970, forKey: sessionStartKey)
     sharedDefaults?.set(lockMinutes, forKey: "free_minutes")
+    sharedDefaults?.set(appName, forKey: "display_app_name")
     sharedDefaults?.removeObject(forKey: unlockUntilKey)
+    sharedDefaults?.synchronize()
 
     if mode == "immediate" {
       applyShield()
@@ -353,6 +359,7 @@ import UserNotifications
   private func startDeviceActivityMonitoring(lockMinutes: Int, warningMinutes: Int) {
     if #available(iOS 15.0, *) {
       loadPersistedSelection()
+      persistSelection()
       let apps = selection.applicationTokens
       let cats = selection.categoryTokens
       if apps.isEmpty && cats.isEmpty {
@@ -444,6 +451,11 @@ import UserNotifications
         }
       }
 
+      if sharedDefaults?.bool(forKey: "force_shield") == true {
+        applyShield()
+        return
+      }
+
       let mode = UserDefaults.standard.string(forKey: modeKey) ?? "immediate"
 
       if mode == "immediate" {
@@ -482,7 +494,7 @@ import UserNotifications
                 warningMinutes: 2,
                 lockMinutes: self.sharedDefaults?.integer(forKey: "free_minutes") ?? 5,
                 mode: "timed",
-                appName: "Selected apps"
+                appName: self.sharedDefaults?.string(forKey: "display_app_name") ?? "Selected apps"
               )
             }
           }
