@@ -36,7 +36,8 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
 
     if name.contains("warning") {
       postNotification(
-        id: "sweatlock_warning",\n        title: "SweatLock",
+        id: "sweatlock_warning",
+        title: "SweatLock",
         body: "Almost out of free time on \(appName)."
       )
       return
@@ -86,7 +87,6 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
         NSLog("SweatLockMonitor: missing token_app_\(idx)")
         return applyAllFallback()
       }
-      // Merge with any already-shielded apps
       var set = store.shield.applications ?? Set<ApplicationToken>()
       set.insert(token)
       store.shield.applications = set
