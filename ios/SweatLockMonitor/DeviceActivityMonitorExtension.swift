@@ -4,7 +4,8 @@ import Foundation
 import ManagedSettings
 import UserNotifications
 
-/// Active usage threshold → apply shield + notification (with app name).
+/// Screen Time usage thresholds only (no wall-clock).
+/// Each monitored app has its own activity; only that app is shielded.
 class DeviceActivityMonitorExtension: DeviceActivityMonitor {
 
   private let store = ManagedSettingsStore(named: .init("sweatlock"))
@@ -28,32 +29,31 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     activity: DeviceActivityName
   ) {
     super.eventDidReachThreshold(event, activity: activity)
-    NSLog("SweatLockMonitor: threshold \(event.rawValue)")
-
-    let appName = defaults?.string(forKey: "display_app_name") ?? "Selected apps"
     let name = event.rawValue
+    NSLog("SweatLockMonitor: threshold \(name)")
+
+    let appName = defaults?.string(forKey: "display_app_name") ?? "This app"
 
     if name.contains("warning") {
       postNotification(
-        id: "sweatlock_warning",
-        title: "SweatLock",
+        id: "sweatlock_warning",\n        title: "SweatLock",
         body: "Almost out of free time on \(appName)."
       )
       return
     }
 
-    // LOCK immediately
-    let applied = applyShield()
-    NSLog("SweatLockMonitor: shield applied=\(applied)")
+    // Shield ONLY the app/category that hit the threshold
+    let applied = applyShieldForEvent(name)
+    NSLog("SweatLockMonitor: per-app shield applied=\(applied) event=\(name)")
 
-    defaults?.set(true, forKey: "pending_workout_open")
     defaults?.set(true, forKey: "force_shield")
+    defaults?.set(true, forKey: "pending_workout_open")
     defaults?.synchronize()
 
     postNotification(
       id: "sweatlock_lock",
       title: "SweatLock — \(appName) locked",
-      body: "Your free time on \(appName) is up. Open SweatLock and complete a workout to unlock.",
+      body: "Screen Time limit reached on \(appName). Open SweatLock and complete a workout to unlock.",
       openWorkout: true
     )
   }
@@ -63,7 +63,7 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     activity: DeviceActivityName
   ) {
     super.eventWillReachThresholdWarning(event, activity: activity)
-    let appName = defaults?.string(forKey: "display_app_name") ?? "Selected apps"
+    let appName = defaults?.string(forKey: "display_app_name") ?? "This app"
     postNotification(
       id: "sweatlock_warning",
       title: "SweatLock",
@@ -71,43 +71,62 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     )
   }
 
+  /// event name: sweatlock.threshold.app.N or sweatlock.threshold.cat.N
   @discardableResult
-  private func applyShield() -> Bool {
+  private func applyShieldForEvent(_ eventName: String) -> Bool {
     guard let defaults else {
-      NSLog("SweatLockMonitor: App Group defaults nil — check entitlement group.com.sweat.lock.shield")
+      NSLog("SweatLockMonitor: App Group nil")
       return false
     }
 
-    guard let data = defaults.data(forKey: "family_selection") else {
-      NSLog("SweatLockMonitor: no family_selection data in App Group")
-      return false
+    if let idx = parseIndex(eventName, prefix: "threshold.app.") {
+      guard let data = defaults.data(forKey: "token_app_\(idx)"),
+            let token = try? PropertyListDecoder().decode(ApplicationToken.self, from: data)
+      else {
+        NSLog("SweatLockMonitor: missing token_app_\(idx)")
+        return applyAllFallback()
+      }
+      // Merge with any already-shielded apps
+      var set = store.shield.applications ?? Set<ApplicationToken>()
+      set.insert(token)
+      store.shield.applications = set
+      NSLog("SweatLockMonitor: SHIELD app index=\(idx) total=\(set.count)")
+      return true
     }
 
-    guard let selection = try? PropertyListDecoder().decode(
-      FamilyActivitySelection.self,
-      from: data
-    ) else {
-      NSLog("SweatLockMonitor: failed to decode FamilyActivitySelection")
-      return false
+    if let idx = parseIndex(eventName, prefix: "threshold.cat.") {
+      guard let data = defaults.data(forKey: "token_cat_\(idx)"),
+            let token = try? PropertyListDecoder().decode(ActivityCategoryToken.self, from: data)
+      else {
+        return applyAllFallback()
+      }
+      var set = Set<ActivityCategoryToken>()
+      if case .specific(let existing)? = store.shield.applicationCategories {
+        set = existing
+      }
+      set.insert(token)
+      store.shield.applicationCategories = .specific(set)
+      return true
     }
 
+    return applyAllFallback()
+  }
+
+  private func parseIndex(_ name: String, prefix: String) -> Int? {
+    guard let r = name.range(of: prefix) else { return nil }
+    return Int(name[r.upperBound...])
+  }
+
+  private func applyAllFallback() -> Bool {
+    guard let data = defaults?.data(forKey: "family_selection"),
+          let selection = try? PropertyListDecoder().decode(
+            FamilyActivitySelection.self, from: data
+          ) else { return false }
     let apps = selection.applicationTokens
     let cats = selection.categoryTokens
-
-    if apps.isEmpty && cats.isEmpty {
-      NSLog("SweatLockMonitor: selection empty")
-      return false
-    }
-
-    if !apps.isEmpty {
-      store.shield.applications = apps
-    }
-    if !cats.isEmpty {
-      store.shield.applicationCategories = .specific(cats)
-    }
-
-    NSLog("SweatLockMonitor: SHIELD ON apps=\(apps.count) cats=\(cats.count)")
-    return true
+    if !apps.isEmpty { store.shield.applications = apps }
+    if !cats.isEmpty { store.shield.applicationCategories = .specific(cats) }
+    return !apps.isEmpty || !cats.isEmpty
   }
 
   private func postNotification(
