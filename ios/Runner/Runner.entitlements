@@ -4,7 +4,9 @@
 <dict>
 	<key>com.apple.developer.family-controls</key>
 	<true/>
-	<key>com.apple.developer.family-controls.app-and-website-usage</key>
-	<true/>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.sweatlock.shared</string>
+	</array>
 </dict>
 </plist>
