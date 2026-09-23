@@ -48,9 +48,12 @@ class WorkoutProvider extends ChangeNotifier {
   String? get appName => _appName;
 
   bool _isDown = false;
+  DateTime? _lastRepAt;
+  static const _minRepGap = Duration(milliseconds: 900);
+  static const _minLikelihood = 0.55;
+
   String? _sessionId;
   String? _unlockedAppId;
-
   DateTime? _startedAt;
 
   Future<void> init({
@@ -64,13 +67,13 @@ class WorkoutProvider extends ChangeNotifier {
     _isLoading = true;
     _currentReps = 0;
     _isDown = false;
-    _feedback = 'Get into position';
+    _lastRepAt = null;
+    _feedback = 'Get into position — full body in frame';
     _unlockedAppId = unlockedAppId;
 
     BlockedApp? blocked;
     if (unlockedAppId != null) {
-      final apps = HiveService.getBlockedApps();
-      for (final a in apps) {
+      for (final a in HiveService.getBlockedApps()) {
         if (a.id == unlockedAppId) {
           blocked = a;
           break;
@@ -112,7 +115,7 @@ class WorkoutProvider extends ChangeNotifier {
       _poseDetector = PoseDetector(
         options: PoseDetectorOptions(
           mode: PoseDetectionMode.stream,
-          model: PoseDetectionModel.base,
+          model: PoseDetectionModel.accurate,
         ),
       );
 
@@ -133,7 +136,8 @@ class WorkoutProvider extends ChangeNotifier {
     _isWorkoutActive = true;
     _currentReps = 0;
     _isDown = false;
-    _feedback = 'Start ${_exerciseType}!';
+    _lastRepAt = null;
+    _feedback = 'Start $_exerciseType — keep form strict';
     notifyListeners();
 
     await controller!.startImageStream(_processCameraImage);
@@ -167,17 +171,12 @@ class WorkoutProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// After workout: unlock apps and restart monitoring cycle
   Future<void> _grantUnlockAfterWorkout() async {
+    final mins = HiveService.getUnlockDurationMinutes();
     if (Platform.isIOS) {
-      await IosNudgeService.instance.onWorkoutCompleted(
-        unlockMinutes: unlockDurationMinutes,
-      );
+      await IosNudgeService.instance.onWorkoutCompleted(unlockMinutes: mins);
     } else if (Platform.isAndroid) {
-      BlockingService.instance.grantCurrentUnlock(
-        minutes: unlockDurationMinutes,
-      );
-      // Keep accessibility listener running for next block
+      BlockingService.instance.grantCurrentUnlock(minutes: mins);
       await BlockingService.instance.startListening();
     }
   }
@@ -229,6 +228,9 @@ class WorkoutProvider extends ChangeNotifier {
       final poses = await _poseDetector!.processImage(inputImage);
       if (poses.isNotEmpty) {
         _analyzePose(poses.first);
+      } else {
+        _feedback = 'Step into frame — full body visible';
+        notifyListeners();
       }
     } catch (e) {
       debugPrint('Pose detection error: $e');
@@ -255,125 +257,168 @@ class WorkoutProvider extends ChangeNotifier {
     }
   }
 
-  void _countPushUps(Pose pose) {
-    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
-    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
-    final leftElbow = pose.landmarks[PoseLandmarkType.leftElbow];
-    final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
-    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
-    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
+  bool _ok(PoseLandmark? lm) =>
+      lm != null && lm.likelihood >= _minLikelihood;
 
-    if ([leftShoulder, rightShoulder, leftElbow, rightElbow, leftWrist, rightWrist]
-        .contains(null)) {
-      _feedback = 'Make sure your upper body is visible';
+  bool _canCountRep() {
+    if (_lastRepAt == null) return true;
+    return DateTime.now().difference(_lastRepAt!) >= _minRepGap;
+  }
+
+  void _registerRep(String goodMsg) {
+    if (!_canCountRep()) return;
+    _lastRepAt = DateTime.now();
+    _isDown = false;
+    _currentReps++;
+    _feedback =
+        _currentReps >= _targetReps ? 'Great job!' : goodMsg;
+    notifyListeners();
+    if (_currentReps >= _targetReps) stopWorkout(completed: true);
+  }
+
+  void _countPushUps(Pose pose) {
+    final ls = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final rs = pose.landmarks[PoseLandmarkType.rightShoulder];
+    final le = pose.landmarks[PoseLandmarkType.leftElbow];
+    final re = pose.landmarks[PoseLandmarkType.rightElbow];
+    final lw = pose.landmarks[PoseLandmarkType.leftWrist];
+    final rw = pose.landmarks[PoseLandmarkType.rightWrist];
+    final lh = pose.landmarks[PoseLandmarkType.leftHip];
+    final rh = pose.landmarks[PoseLandmarkType.rightHip];
+
+    if (!_ok(ls) || !_ok(rs) || !_ok(le) || !_ok(re) || !_ok(lw) || !_ok(rw)) {
+      _feedback = 'Show shoulders, elbows & wrists clearly';
+      notifyListeners();
+      return;
+    }
+    if (!_ok(lh) || !_ok(rh)) {
+      _feedback = 'Include hips in frame for real push-ups';
       notifyListeners();
       return;
     }
 
-    final leftAngle = _angle(leftShoulder!, leftElbow!, leftWrist!);
-    final rightAngle = _angle(rightShoulder!, rightElbow!, rightWrist!);
+    // Body roughly horizontal: shoulders near hip height (camera coords)
+    final shoulderY = (ls!.y + rs!.y) / 2;
+    final hipY = (lh!.y + rh!.y) / 2;
+    final bodyFlat = (shoulderY - hipY).abs() < 120;
+    if (!bodyFlat) {
+      _feedback = 'Get into plank / push-up position';
+      notifyListeners();
+      return;
+    }
+
+    final leftAngle = _angle(ls, le!, lw!);
+    final rightAngle = _angle(rs, re!, rw!);
     final avgAngle = (leftAngle + rightAngle) / 2;
 
-    if (avgAngle < 100 && !_isDown) {
+    // Stricter: must go deep (< 85°) then fully extend (> 155°)
+    if (avgAngle < 85 && !_isDown) {
       _isDown = true;
-      _feedback = 'Go lower!';
+      _feedback = 'Push up!';
       notifyListeners();
-    } else if (avgAngle > 150 && _isDown) {
-      _isDown = false;
-      _currentReps++;
-      _feedback = _currentReps >= _targetReps ? 'Great job!' : 'Good rep!';
+    } else if (avgAngle > 155 && _isDown) {
+      _registerRep('Good push-up!');
+    } else if (!_isDown && avgAngle > 120) {
+      _feedback = 'Lower your chest toward the floor';
       notifyListeners();
-      if (_currentReps >= _targetReps) stopWorkout(completed: true);
     }
   }
 
   void _countSquats(Pose pose) {
-    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
-    final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
-    final leftKnee = pose.landmarks[PoseLandmarkType.leftKnee];
-    final rightKnee = pose.landmarks[PoseLandmarkType.rightKnee];
-    final leftAnkle = pose.landmarks[PoseLandmarkType.leftAnkle];
-    final rightAnkle = pose.landmarks[PoseLandmarkType.rightAnkle];
+    final lh = pose.landmarks[PoseLandmarkType.leftHip];
+    final rh = pose.landmarks[PoseLandmarkType.rightHip];
+    final lk = pose.landmarks[PoseLandmarkType.leftKnee];
+    final rk = pose.landmarks[PoseLandmarkType.rightKnee];
+    final la = pose.landmarks[PoseLandmarkType.leftAnkle];
+    final ra = pose.landmarks[PoseLandmarkType.rightAnkle];
+    final ls = pose.landmarks[PoseLandmarkType.leftShoulder];
 
-    if ([leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle]
-        .contains(null)) {
-      _feedback = 'Make sure your full body is visible';
+    if (!_ok(lh) || !_ok(rh) || !_ok(lk) || !_ok(rk) || !_ok(la) || !_ok(ra)) {
+      _feedback = 'Show hips, knees & ankles — full body';
+      notifyListeners();
+      return;
+    }
+    if (!_ok(ls)) {
+      _feedback = 'Step back so shoulders are visible too';
       notifyListeners();
       return;
     }
 
-    final leftAngle = _angle(leftHip!, leftKnee!, leftAnkle!);
-    final rightAngle = _angle(rightHip!, rightKnee!, rightAnkle!);
+    final leftAngle = _angle(lh!, lk!, la!);
+    final rightAngle = _angle(rh!, rk!, ra!);
     final avgAngle = (leftAngle + rightAngle) / 2;
 
-    if (avgAngle < 100 && !_isDown) {
+    // Deep squat < 95°, stand > 160°
+    if (avgAngle < 95 && !_isDown) {
       _isDown = true;
-      _feedback = 'Thighs parallel!';
+      _feedback = 'Drive up!';
       notifyListeners();
-    } else if (avgAngle > 150 && _isDown) {
-      _isDown = false;
-      _currentReps++;
-      _feedback = _currentReps >= _targetReps ? 'Great job!' : 'Good squat!';
+    } else if (avgAngle > 160 && _isDown) {
+      _registerRep('Good squat!');
+    } else if (!_isDown) {
+      _feedback = 'Sit back deeper into the squat';
       notifyListeners();
-      if (_currentReps >= _targetReps) stopWorkout(completed: true);
     }
   }
 
   void _countSitUps(Pose pose) {
-    final leftShoulder = pose.landmarks[PoseLandmarkType.leftShoulder];
-    final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
-    final leftHip = pose.landmarks[PoseLandmarkType.leftHip];
-    final rightHip = pose.landmarks[PoseLandmarkType.rightHip];
+    final ls = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final rs = pose.landmarks[PoseLandmarkType.rightShoulder];
+    final lh = pose.landmarks[PoseLandmarkType.leftHip];
+    final rh = pose.landmarks[PoseLandmarkType.rightHip];
+    final lk = pose.landmarks[PoseLandmarkType.leftKnee];
 
-    if ([leftShoulder, rightShoulder, leftHip, rightHip].contains(null)) {
-      _feedback = 'Lie down and keep body visible';
+    if (!_ok(ls) || !_ok(rs) || !_ok(lh) || !_ok(rh) || !_ok(lk)) {
+      _feedback = 'Lie on your back — shoulders, hips & knees visible';
       notifyListeners();
       return;
     }
 
-    final shoulderY = (leftShoulder!.y + rightShoulder!.y) / 2;
-    final hipY = (leftHip!.y + rightHip!.y) / 2;
-    final diff = (shoulderY - hipY).abs();
+    final shoulderY = (ls!.y + rs!.y) / 2;
+    final hipY = (lh!.y + rh!.y) / 2;
+    final torso = _angle(ls, lh, lk!);
 
-    if (diff < 40 && !_isDown) {
+    // Down: nearly flat (large vertical gap small, torso open)
+    // Up: shoulders closer to hips in y, acute torso
+    if (torso > 140 && (shoulderY - hipY).abs() < 50 && !_isDown) {
       _isDown = true;
-      _feedback = 'Curl up!';
+      _feedback = 'Curl up toward knees';
       notifyListeners();
-    } else if (diff > 80 && _isDown) {
-      _isDown = false;
-      _currentReps++;
-      _feedback = _currentReps >= _targetReps ? 'Great job!' : 'Good sit-up!';
+    } else if (torso < 70 && _isDown) {
+      _registerRep('Good sit-up!');
+    } else if (!_isDown) {
+      _feedback = 'Lie flat, then sit up fully';
       notifyListeners();
-      if (_currentReps >= _targetReps) stopWorkout(completed: true);
     }
   }
 
   void _countJumpingJacks(Pose pose) {
-    final leftWrist = pose.landmarks[PoseLandmarkType.leftWrist];
-    final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
-    final leftAnkle = pose.landmarks[PoseLandmarkType.leftAnkle];
-    final rightAnkle = pose.landmarks[PoseLandmarkType.rightAnkle];
+    final lw = pose.landmarks[PoseLandmarkType.leftWrist];
+    final rw = pose.landmarks[PoseLandmarkType.rightWrist];
+    final la = pose.landmarks[PoseLandmarkType.leftAnkle];
+    final ra = pose.landmarks[PoseLandmarkType.rightAnkle];
+    final ls = pose.landmarks[PoseLandmarkType.leftShoulder];
+    final lh = pose.landmarks[PoseLandmarkType.leftHip];
 
-    if ([leftWrist, rightWrist, leftAnkle, rightAnkle].contains(null)) {
-      _feedback = 'Make sure full body is visible';
+    if (!_ok(lw) || !_ok(rw) || !_ok(la) || !_ok(ra) || !_ok(ls) || !_ok(lh)) {
+      _feedback = 'Full body in frame for jumping jacks';
       notifyListeners();
       return;
     }
 
-    final armSpread = (leftWrist!.x - rightWrist!.x).abs();
-    final legSpread = (leftAnkle!.x - rightAnkle!.x).abs();
+    final armSpread = (lw!.x - rw!.x).abs();
+    final legSpread = (la!.x - ra!.x).abs();
+    final armsUp = lw.y < ls!.y && rw.y < ls.y;
 
-    if (armSpread > 120 && legSpread > 80 && !_isDown) {
+    if (armSpread > 140 && legSpread > 90 && armsUp && !_isDown) {
       _isDown = true;
-      _feedback = 'Jump back!';
+      _feedback = 'Jump feet together, arms down';
       notifyListeners();
-    } else if (armSpread < 60 && legSpread < 40 && _isDown) {
-      _isDown = false;
-      _currentReps++;
-      _feedback =
-          _currentReps >= _targetReps ? 'Great job!' : 'Good jumping jack!';
+    } else if (armSpread < 50 && legSpread < 35 && _isDown) {
+      _registerRep('Good jumping jack!');
+    } else if (!_isDown) {
+      _feedback = 'Jump out — arms up, feet wide';
       notifyListeners();
-      if (_currentReps >= _targetReps) stopWorkout(completed: true);
     }
   }
 
