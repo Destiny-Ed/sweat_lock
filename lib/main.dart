@@ -7,13 +7,13 @@ import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/injection.dart';
+import 'package:sweat_lock/presentation/providers/theme_provider.dart';
 import 'package:sweat_lock/presentation/views/blocking/blocked_overlay.dart';
 import 'package:sweat_lock/presentation/views/blocking/ios_nudge_screen.dart';
 import 'package:sweat_lock/presentation/views/onboarding/splash.dart';
 import 'package:sweat_lock/services/blocking_service.dart';
 import 'package:sweat_lock/services/ios_nudge_service.dart';
 
-/// Accessibility overlay entry (Android) — must init Hive before UI.
 @pragma('vm:entry-point')
 void accessibilityOverlay() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -105,14 +105,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: providers(context),
-      child: MaterialApp(
-        navigatorKey: navigatorKey,
-        debugShowCheckedModeBanner: false,
-        title: appName,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.system,
-        home: const SplashScreen(),
+      child: Consumer<ThemeProvider>(
+        builder: (context, theme, _) {
+          return MaterialApp(
+            navigatorKey: navigatorKey,
+            debugShowCheckedModeBanner: false,
+            title: appName,
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: theme.mode,
+            home: const SplashScreen(),
+          );
+        },
       ),
     );
   }
