@@ -31,6 +31,8 @@ class WorkoutScreen extends StatefulWidget {
 }
 
 class _WorkoutScreenState extends State<WorkoutScreen> {
+  bool _navigatedSuccess = false;
+
   @override
   void initState() {
     super.initState();
@@ -60,16 +62,22 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       builder: (context, workoutVm, child) {
         if (!workoutVm.isWorkoutActive &&
             workoutVm.currentReps >= workoutVm.targetReps &&
-            workoutVm.currentReps > 0) {
+            workoutVm.currentReps > 0 &&
+            !_navigatedSuccess) {
+          _navigatedSuccess = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const WorkoutSuccessScreen(),
+            if (!mounted) return;
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => WorkoutSuccessScreen(
+                  reps: workoutVm.currentReps,
+                  exerciseType: workoutVm.exerciseType,
+                  appName: workoutVm.appName,
+                  completed: true,
                 ),
-              );
-            }
+              ),
+            );
           });
         }
 
@@ -98,7 +106,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                         GestureDetector(
                           onTap: () async {
                             await workoutVm.stopWorkout(completed: false);
-                            if (mounted) Navigator.pop(context);
+                            if (mounted) Navigator.pop(context, false);
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -217,7 +225,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                         color: AppColors.primaryGreen,
                       ),
                       const SizedBox(height: 16),
-                      // Per-app playlist
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: CircleAvatar(
