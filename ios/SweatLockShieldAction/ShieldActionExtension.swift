@@ -2,8 +2,10 @@ import ManagedSettings
 import Foundation
 import UIKit
 
-/// Handles taps on the custom shield buttons.
+/// Primary button → open SweatLock workout via URL scheme.
 class ShieldActionExtension: ShieldActionDelegate {
+
+  private let appGroupId = "group.com.sweat.lock.shield"
 
   override func handle(
     action: ShieldAction,
@@ -35,17 +37,16 @@ class ShieldActionExtension: ShieldActionDelegate {
   ) {
     switch action {
     case .primaryButtonPressed:
-      // Mark intent for Flutter when app becomes active
-      let defaults = UserDefaults(suiteName: "group.sweatlock.shared")
+      let defaults = UserDefaults(suiteName: appGroupId)
       defaults?.set(true, forKey: "pending_workout_open")
-      defaults?.set(Date().timeIntervalSince1970, forKey: "pending_workout_at")
       defaults?.synchronize()
-
-      // Open host app via URL scheme (extension-safe)
-      openSweatLockApp()
-
-      // .close dismisses shield briefly; host app should be in foreground
-      completionHandler(.close)
+      openSweatLock()
+      // .defer keeps extension lifecycle a moment so open can start
+      completionHandler(.defer)
+      // Also try close after short delay path — system varies by iOS version
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        // no-op; already completed
+      }
 
     case .secondaryButtonPressed:
       completionHandler(.close)
@@ -55,24 +56,21 @@ class ShieldActionExtension: ShieldActionDelegate {
     }
   }
 
-  /// Opens sweatlock://workout from an app extension context.
-  private func openSweatLockApp() {
+  private func openSweatLock() {
     guard let url = URL(string: "sweatlock://workout") else { return }
 
-    // UIApplication.shared is unavailable in extensions; use runtime lookup.
-    let selector = NSSelectorFromString("sharedApplication")
-    guard let appType = NSClassFromString("UIApplication") as? NSObject.Type,
-          appType.responds(to: selector),
-          let unmanaged = appType.perform(selector),
-          let app = unmanaged.takeUnretainedValue() as? UIApplication else {
-      // Fallback: Darwin notification so a background process could wake — flag is enough
+    // 1) UIApplication via runtime (extension-safe)
+    if let app = UIApplication.value(forKeyPath: "sharedApplication") as? UIApplication {
+      app.open(url, options: [:], completionHandler: nil)
       return
     }
 
-    if app.responds(to: #selector(UIApplication.open(_:options:completionHandler:))) {
+    // 2) Selector fallback
+    let selector = NSSelectorFromString("sharedApplication")
+    if let appType = NSClassFromString("UIApplication") as? NSObject.Type,
+       appType.responds(to: selector),
+       let app = appType.perform(selector)?.takeUnretainedValue() as? UIApplication {
       app.open(url, options: [:], completionHandler: nil)
-    } else {
-      app.perform(NSSelectorFromString("openURL:"), with: url)
     }
   }
 }
