@@ -43,7 +43,6 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
       return
     }
 
-    // Shield ONLY the app/category that hit the threshold
     let applied = applyShieldForEvent(name)
     NSLog("SweatLockMonitor: per-app shield applied=\(applied) event=\(name)")
 
@@ -100,12 +99,9 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
       else {
         return applyAllFallback()
       }
-      var set = Set<ActivityCategoryToken>()
-      if case .specific(let existing)? = store.shield.applicationCategories {
-        set = existing
-      }
-      set.insert(token)
-      store.shield.applicationCategories = .specific(set)
+      // Current SDK: .specific is (Set, except:) — set category without reading back
+      store.shield.applicationCategories = .specific(Set([token]))
+      NSLog("SweatLockMonitor: SHIELD category index=\(idx)")
       return true
     }
 
