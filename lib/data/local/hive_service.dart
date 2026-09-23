@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/data/models/blocked_app.dart';
@@ -111,6 +112,14 @@ class HiveService {
     return List<String>.from(raw);
   }
 
+  static Future<void> setPreferYoutubeMusic(bool value) async {
+    await _settings.put('prefer_youtube_music', value);
+  }
+
+  static bool getPreferYoutubeMusic() {
+    return _settings.get('prefer_youtube_music', defaultValue: false) as bool;
+  }
+
   static Future<void> setBlockMode(String mode) async {
     await _settings.put('block_mode', mode);
   }
@@ -166,6 +175,24 @@ class HiveService {
     ) as int;
   }
 
+  static Future<void> setThemeMode(ThemeMode mode) async {
+    final s = switch (mode) {
+      ThemeMode.light => 'light',
+      ThemeMode.dark => 'dark',
+      ThemeMode.system => 'system',
+    };
+    await _settings.put('theme_mode', s);
+  }
+
+  static ThemeMode getThemeMode() {
+    final s = _settings.get('theme_mode', defaultValue: 'system') as String;
+    return switch (s) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
+  }
+
   static Future<void> setReadingPdfPath(String? path) async {
     if (path == null || path.isEmpty) {
       await _settings.delete('reading_pdf_path');
@@ -186,9 +213,8 @@ class HiveService {
     return _settings.get('reading_unlock_enabled', defaultValue: true) as bool;
   }
 
-  // ---------- Android usage / unlock (shared with overlay isolate) ----------
-
-  static Future<void> setPackageUnlockUntil(String package, DateTime until) async {
+  static Future<void> setPackageUnlockUntil(
+      String package, DateTime until) async {
     await _settings.put('unlock_until_$package', until.millisecondsSinceEpoch);
   }
 
@@ -236,7 +262,6 @@ class HiveService {
     await _settings.put('warned_$package', value);
   }
 
-  /// Live usage including current foreground session.
   static int liveUsageMs(String package) {
     var total = getUsageMs(package);
     final start = getSessionStartMs(package);
@@ -250,6 +275,23 @@ class HiveService {
     await _settings.delete('usage_ms_$package');
     await _settings.delete('session_start_$package');
     await _settings.delete('warned_$package');
+  }
+
+  /// Emergency unlocks remaining today (resets at midnight).
+  static int emergencyUnlocksRemaining() {
+    final progress = getProgress();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    int used = progress.emergencyUnlocksUsedToday;
+    if (progress.lastEmergencyUnlockDate != null) {
+      final last = DateTime(
+        progress.lastEmergencyUnlockDate!.year,
+        progress.lastEmergencyUnlockDate!.month,
+        progress.lastEmergencyUnlockDate!.day,
+      );
+      if (last != today) used = 0;
+    }
+    return (emergencyUnlocksPerDay - used).clamp(0, emergencyUnlocksPerDay);
   }
 
   static Future<void> logout() async {
