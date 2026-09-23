@@ -18,12 +18,12 @@
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		FD3196F63063F55D003EC577 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FD3196F53063F55D003EC577 /* DeviceActivity.framework */; };
-		FD3196FE3063F55D003EC577 /* SweatLockMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FD3196F43063F55D003EC577 /* SweatLockMonitor.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		FD3196FE3063F55D003EC577 /* SweatLockMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FD3196F43063F55D003EC577 /* SweatLockMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		FD31970B3063F774003EC577 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FD31970A3063F774003EC577 /* ManagedSettings.framework */; };
 		FD31970D3063F774003EC577 /* ManagedSettingsUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FD31970C3063F774003EC577 /* ManagedSettingsUI.framework */; };
-		FD3197153063F774003EC577 /* SweatLockShieldConfig.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FD3197093063F774003EC577 /* SweatLockShieldConfig.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		FD3197153063F774003EC577 /* SweatLockShieldConfig.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FD3197093063F774003EC577 /* SweatLockShieldConfig.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		FD3197203063F7D8003EC577 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FD31970A3063F774003EC577 /* ManagedSettings.framework */; };
-		FD3197283063F7D8003EC577 /* SweatLockShieldAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FD31971F3063F7D8003EC577 /* SweatLockShieldAction.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		FD3197283063F7D8003EC577 /* SweatLockShieldAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FD31971F3063F7D8003EC577 /* SweatLockShieldAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -346,10 +346,10 @@
 				97C146EB1CF9000F007C117D /* Frameworks */,
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
-				FD3196FF3063F55D003EC577 /* Embed Foundation Extensions */,
+				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 				8ABA70C739BAD1469E21D88B /* [CP] Embed Pods Frameworks */,
 				5C13F898A750B18203785DC4 /* [CP] Copy Pods Resources */,
-				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
+				FD3196FF3063F55D003EC577 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
@@ -542,7 +542,6 @@
 		};
 		5C13F898A750B18203785DC4 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -604,7 +603,6 @@
 		};
 		8ABA70C739BAD1469E21D88B /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
