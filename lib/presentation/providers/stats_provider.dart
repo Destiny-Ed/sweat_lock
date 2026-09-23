@@ -19,12 +19,13 @@ class StatsProvider extends ChangeNotifier {
     final now = DateTime.now();
     switch (_selectedTab) {
       case 'weekly':
-        final start = now.subtract(Duration(days: now.weekday - 1));
-        final dayStart = DateTime(start.year, start.month, start.day);
-        return _sessions.where((s) => s.startedAt.isAfter(dayStart)).toList();
+        // Calendar week Mon–Sun
+        final monday = now.subtract(Duration(days: now.weekday - 1));
+        final dayStart = DateTime(monday.year, monday.month, monday.day);
+        return _sessions.where((s) => !s.startedAt.isBefore(dayStart)).toList();
       case 'monthly':
         final start = DateTime(now.year, now.month, 1);
-        return _sessions.where((s) => s.startedAt.isAfter(start)).toList();
+        return _sessions.where((s) => !s.startedAt.isBefore(start)).toList();
       default:
         return _sessions;
     }
@@ -38,23 +39,33 @@ class StatsProvider extends ChangeNotifier {
   int get totalWorkouts =>
       filteredSessions.where((s) => s.completedAt != null).length;
 
-  /// Mon–Sun (or last 7 days) rep totals for bar chart
+  /// Mon=0 … Sun=6 for the **current calendar week** (matches axis labels).
   List<double> get weeklyReps {
     final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
     final result = List<double>.filled(7, 0);
+
     for (final s in _sessions) {
-      final diff = now.difference(s.startedAt).inDays;
+      final day = DateTime(
+        s.startedAt.year,
+        s.startedAt.month,
+        s.startedAt.day,
+      );
+      final diff = day.difference(monday).inDays;
       if (diff >= 0 && diff < 7) {
-        final index = 6 - diff; // oldest left, today right
-        if (index >= 0 && index < 7) {
-          result[index] += s.completedReps.toDouble();
-        }
+        result[diff] += s.completedReps.toDouble();
       }
     }
     return result;
   }
 
-  /// Most expensive app by total reps unlocked
+  /// Labels Mon–Sun for the current week (index matches [weeklyReps]).
+  List<String> get weeklyLabels =>
+      const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  int get todayIndex => DateTime.now().weekday - 1; // Mon=0
+
   MapEntry<String, int>? get topAppByReps {
     final map = <String, int>{};
     for (final s in filteredSessions) {
