@@ -75,30 +75,41 @@ class IosNudgeService {
           result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       _selectedIosApps = apps;
 
-      final existing = HiveService.getBlockedApps()
+      // Keep Android-only entries; REPLACE all iOS token apps with picker result
+      final androidOnly = HiveService.getBlockedApps()
           .where((a) => a.packageName.isNotEmpty && a.bundleId.isEmpty)
           .toList();
 
+      final iosApps = <BlockedApp>[];
       for (final app in apps) {
         final bundleId =
             app['bundleId']?.toString() ?? app['token']?.toString() ?? '';
+        if (bundleId.isEmpty) continue;
         final name = app['appName']?.toString() ?? 'App';
-        final blocked = BlockedApp(
-          id: app['id']?.toString() ??
-              DateTime.now().millisecondsSinceEpoch.toString(),
-          appName: name,
-          packageName: '',
-          bundleId: bundleId,
-          requiredReps: app['requiredReps'] as int? ?? defaultReps,
-          exerciseType: app['exerciseType']?.toString() ?? defaultExercise,
-          playlistName: '$name Workout Mix',
+        iosApps.add(
+          BlockedApp(
+            id: app['id']?.toString() ??
+                DateTime.now().millisecondsSinceEpoch.toString(),
+            appName: name,
+            packageName: '',
+            bundleId: bundleId,
+            requiredReps: app['requiredReps'] as int? ?? defaultReps,
+            exerciseType: app['exerciseType']?.toString() ?? defaultExercise,
+            playlistName: '$name Workout Mix',
+          ),
         );
-        existing.removeWhere((a) => a.bundleId == bundleId);
-        existing.add(blocked);
       }
 
-      await HiveService.saveBlockedApps(existing);
-      await startMonitoring();
+      await HiveService.saveBlockedApps([...androidOnly, ...iosApps]);
+
+      // Empty picker → unlock; otherwise apply mode
+      if (iosApps.isEmpty) {
+        await clearShield();
+        await stopMonitoring();
+      } else {
+        await startMonitoring();
+      }
+
       return apps;
     } catch (e) {
       debugPrint('selectApps error: $e');
@@ -116,17 +127,28 @@ class IosNudgeService {
     final warning = HiveService.getWarningMinutes();
 
     try {
-      await _channel.invokeMethod('startTimedLock', {
+      // Prefer setBlockMode so native always clears then applies correctly
+      await _channel.invokeMethod('setBlockMode', {
         'warningMinutes': warning,
         'lockMinutes': lock,
         'mode': mode,
         'appName': _displayAppName,
       });
       debugPrint(
-        'IosNudgeService: mode=$mode lock=${lock}m warn=${warning}m name=$_displayAppName',
+        'IosNudgeService: setBlockMode=$mode lock=${lock}m warn=${warning}m',
       );
     } catch (e) {
-      debugPrint('startTimedLock error: $e');
+      debugPrint('setBlockMode error: $e');
+      try {
+        await _channel.invokeMethod('startTimedLock', {
+          'warningMinutes': warning,
+          'lockMinutes': lock,
+          'mode': mode,
+          'appName': _displayAppName,
+        });
+      } catch (e2) {
+        debugPrint('startTimedLock error: $e2');
+      }
     }
   }
 
