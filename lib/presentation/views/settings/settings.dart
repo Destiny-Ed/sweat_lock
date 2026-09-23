@@ -32,7 +32,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late bool _notifications;
   late bool _preventUninstall;
   bool _accessibilityOn = false;
-  String _screenTimeStatus = 'unknown';
 
   @override
   void initState() {
@@ -54,10 +53,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (Platform.isAndroid) {
       _accessibilityOn =
           await BlockingService.instance.isAccessibilityEnabled();
-    }
-    if (Platform.isIOS) {
-      // status string from channel if available
-      _screenTimeStatus = 'check below';
     }
     if (mounted) setState(() {});
   }
@@ -193,15 +188,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: CustomScrollView(
         slivers: [
-          SniverToBoxAdapter(
+          SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 15),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 10),
-
-                  // ---- Blocking mode ----
                   Text('Blocking preference',
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 10),
@@ -256,11 +249,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('Free minutes',
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium),
+                                  style: Theme.of(context).textTheme.titleMedium),
                               Text('${_freeMinutes.round()}',
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium),
+                                  style: Theme.of(context).textTheme.titleMedium),
                             ],
                           ),
                           Slider(
@@ -269,8 +260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             max: 60,
                             divisions: 59,
                             activeColor: AppColors.primaryGreen,
-                            onChanged: (v) =>
-                                setState(() => _freeMinutes = v),
+                            onChanged: (v) => setState(() => _freeMinutes = v),
                             onChangeEnd: (v) async {
                               await HiveService.setFreeMinutes(v.round());
                               await _applyMonitoringPrefs();
@@ -280,11 +270,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('Warn before lock (min)',
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium),
+                                  style: Theme.of(context).textTheme.titleMedium),
                               Text('${_warningMinutes.round()}',
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium),
+                                  style: Theme.of(context).textTheme.titleMedium),
                             ],
                           ),
                           Slider(
@@ -306,11 +294,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('Unlock duration (min)',
-                                style:
-                                    Theme.of(context).textTheme.titleMedium),
+                                style: Theme.of(context).textTheme.titleMedium),
                             Text('${_unlockMinutes.round()}',
-                                style:
-                                    Theme.of(context).textTheme.titleMedium),
+                                style: Theme.of(context).textTheme.titleMedium),
                           ],
                         ),
                         Slider(
@@ -319,8 +305,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           max: 120,
                           divisions: 23,
                           activeColor: AppColors.primaryGreen,
-                          onChanged: (v) =>
-                              setState(() => _unlockMinutes = v),
+                          onChanged: (v) => setState(() => _unlockMinutes = v),
                           onChangeEnd: (v) {
                             HiveService.setUnlockDurationMinutes(v.round());
                           },
@@ -328,7 +313,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 16),
                   Text('Permissions',
                       style: Theme.of(context).textTheme.titleMedium),
@@ -400,7 +384,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 16),
                   Text('Security',
                       style: Theme.of(context).textTheme.titleMedium),
@@ -413,7 +396,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           title: const Text('Discourage uninstall'),
                           subtitle: Text(
                             Platform.isAndroid
-                                ? 'Opens device admin / protection settings when available'
+                                ? 'Preference only — full lock needs device admin'
                                 : 'iOS cannot block uninstall without MDM',
                           ),
                           value: _preventUninstall,
@@ -421,19 +404,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onChanged: (v) async {
                             setState(() => _preventUninstall = v);
                             await HiveService.setPreventUninstall(v);
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    Platform.isIOS
-                                        ? 'iOS does not allow apps to prevent uninstall'
-                                        : v
-                                            ? 'Enable device admin in system settings for stronger protection'
-                                            : 'Uninstall protection preference saved',
-                                  ),
-                                ),
-                              );
-                            }
                           },
                         ),
                         const Divider(),
@@ -456,7 +426,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 16),
                   Text('Exercise',
                       style: Theme.of(context).textTheme.titleMedium),
@@ -469,11 +438,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('Reps per session',
-                                style:
-                                    Theme.of(context).textTheme.titleMedium),
+                                style: Theme.of(context).textTheme.titleMedium),
                             Text('${_reps.round()}',
-                                style:
-                                    Theme.of(context).textTheme.titleMedium),
+                                style: Theme.of(context).textTheme.titleMedium),
                           ],
                         ),
                         Slider(
@@ -507,7 +474,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 16),
                   Text('Locked apps',
                       style: Theme.of(context).textTheme.titleMedium),
@@ -559,7 +525,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 16),
                   Text('Account',
                       style: Theme.of(context).textTheme.titleMedium),
@@ -572,7 +537,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onTap: _logout,
                     ),
                   ),
-
                   const SizedBox(height: 16),
                   Text('About',
                       style: Theme.of(context).textTheme.titleMedium),
