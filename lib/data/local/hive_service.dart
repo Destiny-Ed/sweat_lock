@@ -277,7 +277,31 @@ class HiveService {
     await _settings.delete('warned_$package');
   }
 
-  /// Emergency unlocks remaining today (resets at midnight).
+  /// Last package that triggered the lock overlay (single-app unlock).
+  static Future<void> setLastBlockedPackage(String? package) async {
+    if (package == null || package.isEmpty) {
+      await _settings.delete('last_blocked_package');
+    } else {
+      await _settings.put('last_blocked_package', package);
+    }
+  }
+
+  static String? getLastBlockedPackage() {
+    return _settings.get('last_blocked_package') as String?;
+  }
+
+  static Future<void> setLastBlockedAppId(String? id) async {
+    if (id == null || id.isEmpty) {
+      await _settings.delete('last_blocked_app_id');
+    } else {
+      await _settings.put('last_blocked_app_id', id);
+    }
+  }
+
+  static String? getLastBlockedAppId() {
+    return _settings.get('last_blocked_app_id') as String?;
+  }
+
   static int emergencyUnlocksRemaining() {
     final progress = getProgress();
     final now = DateTime.now();
@@ -300,5 +324,7 @@ class HiveService {
     await _sessions.clear();
     await _progress.clear();
     await _settings.delete('reading_pdf_path');
+    await _settings.delete('last_blocked_package');
+    await _settings.delete('last_blocked_app_id');
   }
 }
