@@ -1,8 +1,8 @@
 import ManagedSettings
 import Foundation
-import UIKit
+import UserNotifications
 
-/// Primary button → open SweatLock workout via URL scheme.
+/// Primary button → notification "Tap to open SweatLock" (reliable on iOS).
 class ShieldActionExtension: ShieldActionDelegate {
 
   private let appGroupId = "group.com.sweat.lock.shield"
@@ -40,13 +40,10 @@ class ShieldActionExtension: ShieldActionDelegate {
       let defaults = UserDefaults(suiteName: appGroupId)
       defaults?.set(true, forKey: "pending_workout_open")
       defaults?.synchronize()
-      openSweatLock()
-      // .defer keeps extension lifecycle a moment so open can start
-      completionHandler(.defer)
-      // Also try close after short delay path — system varies by iOS version
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-        // no-op; already completed
-      }
+
+      // Extensions cannot reliably open the host app; notify user to tap.
+      postOpenAppNotification()
+      completionHandler(.close)
 
     case .secondaryButtonPressed:
       completionHandler(.close)
@@ -56,21 +53,26 @@ class ShieldActionExtension: ShieldActionDelegate {
     }
   }
 
-  private func openSweatLock() {
-    guard let url = URL(string: "sweatlock://workout") else { return }
+  private func postOpenAppNotification() {
+    let center = UNUserNotificationCenter.current()
+    center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+      guard granted else { return }
 
-    // 1) UIApplication via runtime (extension-safe)
-    if let app = UIApplication.value(forKeyPath: "sharedApplication") as? UIApplication {
-      app.open(url, options: [:], completionHandler: nil)
-      return
-    }
+      let content = UNMutableNotificationContent()
+      content.title = "SweatLock"
+      content.body = "Tap to open SweatLock and start your workout"
+      content.sound = .default
+      content.userInfo = [
+        "openWorkout": true,
+        "deeplink": "sweatlock://workout",
+      ]
 
-    // 2) Selector fallback
-    let selector = NSSelectorFromString("sharedApplication")
-    if let appType = NSClassFromString("UIApplication") as? NSObject.Type,
-       appType.responds(to: selector),
-       let app = appType.perform(selector)?.takeUnretainedValue() as? UIApplication {
-      app.open(url, options: [:], completionHandler: nil)
+      let req = UNNotificationRequest(
+        identifier: "sweatlock_open_app",
+        content: content,
+        trigger: nil
+      )
+      center.add(req, withCompletionHandler: nil)
     }
   }
 }
