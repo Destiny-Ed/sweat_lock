@@ -8,7 +8,6 @@ import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/services/blocking_service.dart';
 import 'package:sweat_lock/services/ios_nudge_service.dart';
 
-/// Read [requiredReadingPages] unique pages to unlock (alternative to workout).
 class ReadingUnlockScreen extends StatefulWidget {
   final String? unlockedAppId;
   final String? appName;
@@ -45,15 +44,15 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
       setState(() {
         _loading = false;
         _error =
-            'No book PDF found. Upload one in Settings → Reading unlock.';
+            'No book PDF found. Upload one in Settings → Unlock by reading.';
       });
       return;
     }
 
     try {
-      final doc = PdfDocument.openFile(path);
-      _controller = PdfControllerPinch(document: doc);
-      final opened = await doc;
+      final document = PdfDocument.openFile(path);
+      _controller = PdfControllerPinch(document: document);
+      final opened = await document;
       setState(() {
         _pageCount = opened.pagesCount;
         _loading = false;
@@ -62,7 +61,7 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
     } catch (e) {
       setState(() {
         _loading = false;
-        _error = 'Could not open PDF. Try uploading again.';
+        _error = 'Could not open PDF. Try uploading again.\n$e';
       });
     }
   }
@@ -81,7 +80,7 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Unlocked — keep reading next time too!')),
+      const SnackBar(content: Text('Unlocked — nice reading!')),
     );
     Navigator.of(context).pop(true);
   }
@@ -122,7 +121,7 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
                       child: Column(
                         children: [
                           Text(
-                            'Read $_needed pages to unlock'
+                            'View $_needed different pages to unlock'
                             '${_pageCount > 0 ? ' · $_pageCount in book' : ''}',
                             style: const TextStyle(color: Colors.white70),
                           ),
@@ -136,7 +135,7 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '${_visited.length} / $_needed pages viewed',
+                            '${_visited.length} / $_needed pages',
                             style: const TextStyle(
                               color: AppColors.primaryGreen,
                               fontWeight: FontWeight.w600,
