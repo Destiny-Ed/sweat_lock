@@ -8,6 +8,7 @@ import 'package:flutter_accessibility_service/constants.dart';
 import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/data/models/blocked_app.dart';
+import 'package:sweat_lock/services/accountability_feed_service.dart';
 import 'package:sweat_lock/services/schedule_service.dart';
 
 class BlockingService {
@@ -153,14 +154,10 @@ class BlockingService {
       return;
     }
 
-    // Focus schedule forces hard lock (ignore free window).
     final mode = ScheduleService.instance.effectiveBlockMode();
 
     if (mode == 'immediate') {
-      if (ScheduleService.instance.isInFocusWindow && fromTick == false) {
-        // optional: one-shot schedule notification handled lightly
-      }
-      await _lockPackage(packageName, matched);
+      await _lockPackage(packageName, matched, fromTimedExpiry: false);
       return;
     }
 
@@ -182,7 +179,14 @@ class BlockingService {
         body:
             'Free window ended. Workout, walk, or read + quiz to unlock ${matched.appName} only.',
       );
-      await _lockPackage(packageName, matched);
+      // Doomscroll complete without challenge → optional public fail
+      unawaited(
+        AccountabilityFeedService.instance.recordFail(
+          appName: matched.appName,
+          usageMinutes: (used / 60000).round(),
+        ),
+      );
+      await _lockPackage(packageName, matched, fromTimedExpiry: true);
       return;
     }
 
@@ -202,7 +206,11 @@ class BlockingService {
     }
   }
 
-  Future<void> _lockPackage(String packageName, BlockedApp matched) async {
+  Future<void> _lockPackage(
+    String packageName,
+    BlockedApp matched, {
+    bool fromTimedExpiry = false,
+  }) async {
     _currentlyBlockedPackage = packageName;
     await HiveService.setLastBlockedPackage(packageName);
     await HiveService.setLastBlockedAppId(matched.id);
@@ -277,7 +285,8 @@ class BlockingService {
   }
 
   Future<void> grantCurrentUnlock({int? minutes}) async {
-    await grantUnlockForAppId(HiveService.getLastBlockedAppId(), minutes: minutes);
+    await grantUnlockForAppId(HiveService.getLastBlockedAppId(),
+        minutes: minutes);
   }
 
   Future<void> grantUnlockAll({int? minutes}) async {
