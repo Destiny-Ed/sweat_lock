@@ -549,12 +549,9 @@ extension AppDelegate {
     willPresent notification: UNNotification,
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
-    // Timed lock notifications are notify-only (no shield)
-    if notification.request.identifier == "sweatlock_relock" {
-      let mode = UserDefaults.standard.string(forKey: modeKey) ?? "immediate"
-      if mode == "immediate" {
-        applyShield()
-      }
+    if notification.request.identifier == "sweatlock_lock"
+        || notification.request.identifier == "sweatlock_relock" {
+      applyShield()
     }
     if #available(iOS 14.0, *) {
       completionHandler([.banner, .sound])
@@ -570,21 +567,12 @@ extension AppDelegate {
   ) {
     let id = response.notification.request.identifier
     let info = response.notification.request.content.userInfo
-
-    // Timed mode: notification only — open workout, do not shield
     if id == "sweatlock_lock"
+        || id == "sweatlock_relock"
         || info["openWorkout"] as? Bool == true {
+      applyShield()
       sharedDefaults?.set(true, forKey: "pending_workout_open")
       notifyFlutterOpenWorkout()
-      completionHandler()
-      return
-    }
-
-    if id == "sweatlock_relock" {
-      let mode = UserDefaults.standard.string(forKey: modeKey) ?? "immediate"
-      if mode == "immediate" {
-        applyShield()
-      }
     }
     completionHandler()
   }
