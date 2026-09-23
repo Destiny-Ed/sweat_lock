@@ -9,12 +9,14 @@ import 'package:provider/provider.dart';
 import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
-import 'package:sweat_lock/data/models/user_progress.dart';
 import 'package:sweat_lock/presentation/providers/blocking_provider.dart';
+import 'package:sweat_lock/presentation/providers/theme_provider.dart';
 import 'package:sweat_lock/presentation/views/auth/login.dart';
 import 'package:sweat_lock/presentation/views/blocking/select_apps_screen.dart';
 import 'package:sweat_lock/services/blocking_service.dart';
+import 'package:sweat_lock/services/emergency_unlock_service.dart';
 import 'package:sweat_lock/services/ios_nudge_service.dart';
+import 'package:sweat_lock/services/music_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -26,7 +28,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late double _reps;
   late String _exercise;
-  late UserProgress _progress;
   late String _blockMode;
   late double _freeMinutes;
   late double _warningMinutes;
@@ -34,8 +35,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late bool _notifications;
   late bool _preventUninstall;
   late bool _readingEnabled;
+  late bool _preferYoutube;
+  late List<String> _genres;
   String? _pdfPath;
   bool _accessibilityOn = false;
+  int _emergencyLeft = 0;
 
   @override
   void initState() {
@@ -46,7 +50,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _load() async {
     _reps = HiveService.getDefaultReps().toDouble();
     _exercise = HiveService.getDefaultExercise();
-    _progress = HiveService.getProgress();
     _blockMode = HiveService.getBlockMode();
     _freeMinutes = HiveService.getFreeMinutes().toDouble();
     _warningMinutes = HiveService.getWarningMinutes().toDouble();
@@ -54,7 +57,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _notifications = HiveService.getNotificationsEnabled();
     _preventUninstall = HiveService.getPreventUninstall();
     _readingEnabled = HiveService.getReadingUnlockEnabled();
+    _preferYoutube = HiveService.getPreferYoutubeMusic();
+    _genres = List<String>.from(HiveService.getMusicGenres());
     _pdfPath = HiveService.getReadingPdfPath();
+    _emergencyLeft = HiveService.emergencyUnlocksRemaining();
 
     if (Platform.isAndroid) {
       _accessibilityOn =
@@ -76,12 +82,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await src.copy(dest.path);
     await HiveService.setReadingPdfPath(dest.path);
     setState(() => _pdfPath = dest.path);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Book saved — use it to unlock')),
-      );
-    }
+    _toast('Book saved');
   }
 
   Future<void> _rateApp() async {
@@ -93,63 +94,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _useEmergencyUnlock() async {
-    final progress = HiveService.getProgress();
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    int used = progress.emergencyUnlocksUsedToday;
-    if (progress.lastEmergencyUnlockDate != null) {
-      final last = DateTime(
-        progress.lastEmergencyUnlockDate!.year,
-        progress.lastEmergencyUnlockDate!.month,
-        progress.lastEmergencyUnlockDate!.day,
-      );
-      if (last != today) used = 0;
-    }
-
-    if (used >= emergencyUnlocksPerDay) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No emergency unlocks left today')),
-      );
+  Future<void> _emergencyUnlock() async {
+    final left = HiveService.emergencyUnlocksRemaining();
+    if (left <= 0) {
+      _toast('No emergency unlocks left today');
       return;
     }
 
-    final mins = HiveService.getUnlockDurationMinutes();
-    if (Platform.isAndroid) {
-      BlockingService.instance.grantCurrentUnlock(minutes: mins);
-    }
-    if (Platform.isIOS) {
-      await IosNudgeService.instance.onWorkoutCompleted(unlockMinutes: mins);
-    }
-
-    final updated = progress.copyWith(
-      emergencyUnlocksUsedToday: used + 1,
-      lastEmergencyUnlockDate: now,
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return AlertDialog(
+          backgroundColor:
+              isDark ? AppColors.lightGreen : Theme.of(ctx).cardColor,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Emergency unlock?'),
+          content: Text(
+            'Unlocks all locked apps for $emergencyUnlockDurationMinutes minutes without a workout.\n\n'
+            'You have $left use(s) left today.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primaryGreen,
+                foregroundColor: Colors.black,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Unlock now'),
+            ),
+          ],
+        );
+      },
     );
-    await HiveService.saveProgress(updated);
-    setState(() => _progress = updated);
+    if (ok != true) return;
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Emergency unlock used')),
-      );
-    }
-  }
-
-  int get _emergencyLeft {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    int used = _progress.emergencyUnlocksUsedToday;
-    if (_progress.lastEmergencyUnlockDate != null) {
-      final last = DateTime(
-        _progress.lastEmergencyUnlockDate!.year,
-        _progress.lastEmergencyUnlockDate!.month,
-        _progress.lastEmergencyUnlockDate!.day,
-      );
-      if (last != today) used = 0;
-    }
-    return (emergencyUnlocksPerDay - used).clamp(0, emergencyUnlocksPerDay);
+    final result = await EmergencyUnlockService.instance.unlockAll();
+    setState(() => _emergencyLeft = result.remaining);
+    _toast(result.message);
   }
 
   Future<void> _logout() async {
@@ -157,9 +144,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Log out?'),
-        content: const Text(
-          'Clears locked apps and progress on this device.',
-        ),
+        content: const Text('Clears locked apps and progress on this device.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -191,83 +176,169 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (Platform.isIOS) {
       await IosNudgeService.instance.startMonitoring();
     }
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Preferences applied')),
-      );
-    }
+    _toast('Preferences applied');
   }
 
-  Widget _card(Widget child) {
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Widget _section(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 22, 4, 10),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.primaryGreen,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(15),
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(18),
         color: Theme.of(context).cardColor,
+        border: Border.all(
+          color: isDark
+              ? AppColors.primaryGreen.withValues(alpha: 0.12)
+              : Colors.black.withValues(alpha: 0.06),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: child,
     );
   }
 
-  Widget _sectionTitle(String t) => Padding(
-        padding: const EdgeInsets.only(top: 16, bottom: 10),
-        child: Text(t, style: Theme.of(context).textTheme.titleMedium),
-      );
-
   @override
   Widget build(BuildContext context) {
     final blocked = context.watch<BlockingProvider>().blockedApps;
+    final theme = context.watch<ThemeProvider>();
     final pdfName =
         _pdfPath == null ? 'No book uploaded' : p.basename(_pdfPath!);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            tooltip: 'Theme: ${theme.label}',
+            onPressed: () => theme.cycle(),
+            icon: Icon(theme.icon, color: AppColors.primaryGreen),
+          ),
+        ],
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 48),
         children: [
-          _sectionTitle('Blocking'),
+          // Appearance
+          _section('Appearance'),
           _card(
-            Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                RadioListTile<String>(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Immediate'),
-                  subtitle: const Text('Lock as soon as the app is used'),
-                  value: 'immediate',
-                  groupValue: _blockMode,
-                  activeColor: AppColors.primaryGreen,
-                  onChanged: (v) async {
-                    if (v == null) return;
-                    setState(() => _blockMode = v);
-                    await HiveService.setBlockMode(v);
-                    await _applyMonitoringPrefs();
-                  },
+                Text('Theme', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    _themeChip(theme, ThemeMode.system, 'System',
+                        Icons.brightness_auto_rounded),
+                    const SizedBox(width: 8),
+                    _themeChip(theme, ThemeMode.light, 'Light',
+                        Icons.light_mode_rounded),
+                    const SizedBox(width: 8),
+                    _themeChip(theme, ThemeMode.dark, 'Dark',
+                        Icons.dark_mode_rounded),
+                  ],
                 ),
-                RadioListTile<String>(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Timed free window'),
-                  subtitle: const Text(
-                    'Screen Time minutes of use, then lock',
+              ],
+            ),
+          ),
+
+          // Emergency
+          _section('Emergency'),
+          _card(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _emergencyUnlock,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.red.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(Icons.emergency,
+                            color: AppColors.red),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Emergency unlock',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$_emergencyLeft left today · $emergencyUnlockDurationMinutes min unlock',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: isDark ? Colors.white54 : Colors.black45,
+                      ),
+                    ],
                   ),
-                  value: 'timed',
-                  groupValue: _blockMode,
-                  activeColor: AppColors.primaryGreen,
-                  onChanged: (v) async {
-                    if (v == null) return;
-                    setState(() => _blockMode = v);
-                    await HiveService.setBlockMode(v);
-                    await _applyMonitoringPrefs();
-                  },
+                ),
+              ),
+            ),
+          ),
+
+          // Blocking
+          _section('Blocking'),
+          _card(
+            child: Column(
+              children: [
+                _modeTile(
+                  'Immediate',
+                  'Lock as soon as the app opens',
+                  'immediate',
+                ),
+                _modeTile(
+                  'Timed free window',
+                  'Use for a few minutes, then lock',
+                  'timed',
                 ),
                 if (_blockMode == 'timed') ...[
-                  const Divider(),
+                  const Divider(height: 20),
                   _sliderRow(
-                    'Free minutes (Screen Time)',
+                    'Free minutes',
                     _freeMinutes,
                     1,
                     60,
@@ -278,7 +349,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   ),
                   _sliderRow(
-                    'Warn before lock (min)',
+                    'Warn before lock',
                     _warningMinutes,
                     1,
                     15,
@@ -289,7 +360,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   ),
                 ],
-                const Divider(),
+                const Divider(height: 20),
                 _sliderRow(
                   'Unlock duration (min)',
                   _unlockMinutes,
@@ -312,9 +383,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          _sectionTitle('Unlock by reading'),
+
+          // Music
+          _section('Workout music'),
           _card(
-            Column(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Preferred genres',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Opens Spotify (or YouTube Music) during workouts',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: supportedMusicGenres.map((g) {
+                    final sel = _genres
+                        .map((e) => e.toLowerCase())
+                        .contains(g.toLowerCase());
+                    return FilterChip(
+                      label: Text(g),
+                      selected: sel,
+                      selectedColor:
+                          AppColors.primaryGreen.withValues(alpha: 0.35),
+                      checkmarkColor: AppColors.primaryGreen,
+                      onSelected: (v) async {
+                        setState(() {
+                          if (v) {
+                            _genres.add(g);
+                          } else {
+                            _genres.removeWhere(
+                              (e) => e.toLowerCase() == g.toLowerCase(),
+                            );
+                          }
+                        });
+                        await HiveService.setMusicGenres(_genres);
+                      },
+                    );
+                  }).toList(),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Prefer YouTube Music'),
+                  subtitle: const Text('Otherwise opens Spotify'),
+                  value: _preferYoutube,
+                  activeColor: AppColors.primaryGreen,
+                  onChanged: (v) async {
+                    setState(() => _preferYoutube = v);
+                    await HiveService.setPreferYoutubeMusic(v);
+                  },
+                ),
+                if (_genres.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () async {
+                      final g = _genres.first;
+                      final ok = await MusicService.instance.openGenre(
+                        g,
+                        preferYoutube: _preferYoutube,
+                      );
+                      if (!ok) _toast('Could not open music app');
+                    },
+                    icon: const Icon(Icons.play_circle_fill,
+                        color: AppColors.primaryGreen),
+                    label: Text(
+                      'Preview ${_genres.first} playlist',
+                      style: const TextStyle(color: AppColors.primaryGreen),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // Reading
+          _section('Unlock by reading'),
+          _card(
+            child: Column(
               children: [
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -343,9 +492,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          _sectionTitle('Exercise defaults'),
+
+          // Exercise
+          _section('Exercise defaults'),
           _card(
-            Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sliderRow(
@@ -362,12 +513,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
+                  runSpacing: 8,
                   children: supportedExercises.map((e) {
                     final sel = e == _exercise;
                     return ChoiceChip(
                       label: Text(e),
                       selected: sel,
                       selectedColor: AppColors.primaryGreen,
+                      labelStyle: TextStyle(
+                        color: sel
+                            ? Colors.black
+                            : Theme.of(context).textTheme.titleSmall?.color,
+                        fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                      ),
                       onSelected: (_) async {
                         setState(() => _exercise = e);
                         await HiveService.setDefaultExercise(e);
@@ -378,9 +536,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          _sectionTitle('Permissions & security'),
+
+          // Permissions
+          _section('Permissions & security'),
           _card(
-            Column(
+            child: Column(
               children: [
                 if (Platform.isAndroid)
                   SwitchListTile(
@@ -411,15 +571,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onPressed: () async {
                         final ok = await IosNudgeService.instance
                             .requestAuthorization();
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                ok ? 'Approved' : 'Denied or pending',
-                              ),
-                            ),
-                          );
-                        }
+                        _toast(ok ? 'Approved' : 'Denied or pending');
                       },
                       child: const Text('Authorize'),
                     ),
@@ -449,45 +601,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     await HiveService.setPreventUninstall(v);
                   },
                 ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Emergency unlock'),
-                  trailing: Text('$_emergencyLeft left'),
-                  onTap: _useEmergencyUnlock,
-                ),
               ],
             ),
           ),
-          _sectionTitle('About'),
+
+          // About
+          _section('About'),
           _card(
-            Column(
+            child: Column(
               children: [
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Rate SweatLock'),
-                  subtitle: const Text('Share feedback on the store'),
                   leading: const Icon(Icons.star_rounded,
                       color: AppColors.primaryGreen),
+                  title: const Text('Rate SweatLock'),
+                  subtitle: const Text('Share feedback on the store'),
                   onTap: _rateApp,
                 ),
                 const Divider(),
-                ListTile(
+                const ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Version'),
-                  trailing: const Text('1.0.0'),
+                  title: Text('Version'),
+                  trailing: Text('1.0.0'),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Log out'),
-                  textColor: Colors.redAccent,
+                  textColor: AppColors.red,
                   onTap: _logout,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 40),
         ],
       ),
+    );
+  }
+
+  Widget _themeChip(
+    ThemeProvider theme,
+    ThemeMode mode,
+    String label,
+    IconData icon,
+  ) {
+    final sel = theme.mode == mode;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => theme.setMode(mode),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: sel
+                ? AppColors.primaryGreen.withValues(alpha: 0.25)
+                : Theme.of(context).secondaryHeaderColor.withValues(alpha: 0.4),
+            border: Border.all(
+              color: sel ? AppColors.primaryGreen : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(icon,
+                  size: 22,
+                  color: sel ? AppColors.primaryGreen : null),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _modeTile(String title, String subtitle, String value) {
+    return RadioListTile<String>(
+      contentPadding: EdgeInsets.zero,
+      title: Text(title),
+      subtitle: Text(subtitle),
+      value: value,
+      groupValue: _blockMode,
+      activeColor: AppColors.primaryGreen,
+      onChanged: (v) async {
+        if (v == null) return;
+        setState(() => _blockMode = v);
+        await HiveService.setBlockMode(v);
+        await _applyMonitoringPrefs();
+      },
     );
   }
 
@@ -505,7 +712,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Flexible(child: Text(label)),
-            Text('${value.round()}'),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primaryGreen.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '${value.round()}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryGreen,
+                ),
+              ),
+            ),
           ],
         ),
         Slider(
