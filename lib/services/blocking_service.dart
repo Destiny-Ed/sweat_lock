@@ -2,14 +2,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_accessibility_service/accessibility_event.dart';
 import 'package:flutter_accessibility_service/constants.dart';
 import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/data/models/blocked_app.dart';
 
-/// Handles Android app blocking via Accessibility Service.
-/// iOS uses a separate soft-nudge path (Phase 4).
+/// Android blocking via Accessibility — mirrors iOS immediate / timed modes.
 class BlockingService {
   static BlockingService? _instance;
   static BlockingService get instance => _instance ??= BlockingService._();
@@ -19,23 +19,20 @@ class BlockingService {
   StreamSubscription<AccessibilityEvent>? _subscription;
   bool _isListening = false;
   String? _currentlyBlockedPackage;
-  DateTime? _lastUnlockTime;
+  String? _focusedPackage;
+  Timer? _tickTimer;
 
-  /// Temporary unlocks: packageName -> unlock expiry
-  final Map<String, DateTime> _temporaryUnlocks = {};
+  static const _notifChannel = MethodChannel('sweatlock/android_notify');
 
   bool get isListening => _isListening;
+  String? get currentlyBlockedPackage => _currentlyBlockedPackage;
 
-  /// Convenience: check permission and start if granted
   Future<void> checkAndStart() async {
     if (!Platform.isAndroid) return;
     final enabled = await isAccessibilityEnabled();
-    if (enabled) {
-      await startListening();
-    }
+    if (enabled) await startListening();
   }
 
-  /// Check if accessibility permission is granted
   Future<bool> isAccessibilityEnabled() async {
     if (!Platform.isAndroid) return false;
     try {
@@ -46,7 +43,6 @@ class BlockingService {
     }
   }
 
-  /// Request user to enable accessibility service
   Future<bool> requestAccessibilityPermission() async {
     if (!Platform.isAndroid) return false;
     try {
@@ -57,7 +53,6 @@ class BlockingService {
     }
   }
 
-  /// Start listening for app open events
   Future<void> startListening() async {
     if (!Platform.isAndroid || _isListening) return;
 
@@ -73,55 +68,154 @@ class BlockingService {
       onError: (e) => debugPrint('Accessibility stream error: $e'),
     );
     _isListening = true;
-    debugPrint('BlockingService started listening');
+    _startTick();
+    debugPrint('BlockingService started');
   }
 
   void stopListening() {
     _subscription?.cancel();
     _subscription = null;
+    _tickTimer?.cancel();
     _isListening = false;
   }
 
-  void _onAccessibilityEvent(AccessibilityEvent event) async {
+  /// Periodic tick so timed mode locks even without new accessibility events.
+  void _startTick() {
+    _tickTimer?.cancel();
+    _tickTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      final pkg = _focusedPackage;
+      if (pkg != null) {
+        unawaited(_evaluatePackage(pkg, fromTick: true));
+      }
+    });
+  }
+
+  Future<void> _onAccessibilityEvent(AccessibilityEvent event) async {
     final packageName = event.packageName;
     if (packageName == null || packageName.isEmpty) return;
 
-    // Ignore our own app
     if (packageName.contains('sweat_lock') ||
         packageName.contains('flutter_accessibility')) {
       return;
     }
 
-    // Only care about window state changes (app opened / focused)
     if (event.eventType != EventType.typeWindowStateChanged) return;
 
-    final blockedApps =
-        HiveService.getBlockedApps().where((a) => a.isActive).toList();
-
-    BlockedApp? matched;
-    for (final a in blockedApps) {
-      if (a.packageName == packageName || packageName.contains(a.packageName)) {
-        matched = a;
-        break;
-      }
+    // Leaving previous focused app → freeze its session timer
+    if (_focusedPackage != null && _focusedPackage != packageName) {
+      await _pauseSession(_focusedPackage!);
     }
 
+    _focusedPackage = packageName;
+    await _evaluatePackage(packageName);
+  }
+
+  Future<void> _pauseSession(String package) async {
+    final start = HiveService.getSessionStartMs(package);
+    if (start == null) return;
+    final extra = DateTime.now().millisecondsSinceEpoch - start;
+    final total = HiveService.getUsageMs(package) + extra;
+    await HiveService.setUsageMs(package, total);
+    await HiveService.setSessionStartMs(package, null);
+  }
+
+  BlockedApp? _matchBlocked(String packageName) {
+    final blockedApps =
+        HiveService.getBlockedApps().where((a) => a.isActive).toList();
+    for (final a in blockedApps) {
+      if (a.packageName.isEmpty) continue;
+      if (a.packageName == packageName ||
+          packageName.contains(a.packageName) ||
+          a.packageName.contains(packageName)) {
+        return a;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _evaluatePackage(String packageName, {bool fromTick = false}) async {
+    final matched = _matchBlocked(packageName);
+
     if (matched == null) {
-      if (_currentlyBlockedPackage != null) {
+      if (_currentlyBlockedPackage == packageName) {
         await hideBlockOverlay();
         _currentlyBlockedPackage = null;
       }
       return;
     }
 
-    // Check temporary unlock
-    final unlockExpiry = _temporaryUnlocks[packageName];
-    if (unlockExpiry != null && DateTime.now().isBefore(unlockExpiry)) {
+    // Temporary unlock after workout / reading
+    if (HiveService.isPackageTemporarilyUnlocked(packageName)) {
+      await hideBlockOverlay();
+      _currentlyBlockedPackage = null;
       return;
     }
 
-    _currentlyBlockedPackage = packageName;
-    await showBlockOverlay();
+    final mode = HiveService.getBlockMode();
+
+    if (mode == 'immediate') {
+      _currentlyBlockedPackage = packageName;
+      await showBlockOverlay();
+      return;
+    }
+
+    // --- Timed free window (active use only) ---
+    if (HiveService.getSessionStartMs(packageName) == null) {
+      await HiveService.setSessionStartMs(
+        packageName,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    }
+
+    final freeMs = HiveService.getFreeMinutes() * 60 * 1000;
+    final warnMs = HiveService.getWarningMinutes() * 60 * 1000;
+    final used = HiveService.liveUsageMs(packageName);
+
+    if (used >= freeMs) {
+      _currentlyBlockedPackage = packageName;
+      await _notify(
+        id: 2001,
+        title: 'SweatLock — ${matched.appName} locked',
+        body:
+            'Free time on ${matched.appName} is up. Complete a workout or read to unlock.',
+      );
+      await showBlockOverlay();
+      return;
+    }
+
+    final warnAt = (freeMs - warnMs).clamp(0, freeMs);
+    if (used >= warnAt && !HiveService.wasWarned(packageName)) {
+      await HiveService.setWarned(packageName, true);
+      await _notify(
+        id: 2002,
+        title: 'SweatLock',
+        body:
+            'Almost out of free time on ${matched.appName}.',
+      );
+    }
+
+    // Still in free window
+    if (_currentlyBlockedPackage == packageName) {
+      await hideBlockOverlay();
+      _currentlyBlockedPackage = null;
+    }
+  }
+
+  Future<void> _notify({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    if (!HiveService.getNotificationsEnabled()) return;
+    try {
+      await _notifChannel.invokeMethod('show', {
+        'id': id,
+        'title': title,
+        'body': body,
+      });
+    } catch (e) {
+      debugPrint('notify error: $e');
+    }
   }
 
   Future<void> showBlockOverlay() async {
@@ -140,27 +234,39 @@ class BlockingService {
     }
   }
 
-  /// Call after successful workout to temporarily unlock the app
-  void grantTemporaryUnlock(String packageName, {int minutes = 30}) {
-    _temporaryUnlocks[packageName] =
-        DateTime.now().add(Duration(minutes: minutes));
-    _lastUnlockTime = DateTime.now();
-    hideBlockOverlay();
+  /// After successful workout/reading — temporary unlock + reset usage.
+  Future<void> grantTemporaryUnlock(
+    String packageName, {
+    int? minutes,
+  }) async {
+    final mins = minutes ?? HiveService.getUnlockDurationMinutes();
+    final until = DateTime.now().add(Duration(minutes: mins));
+    await HiveService.setPackageUnlockUntil(packageName, until);
+    await HiveService.resetPackageUsage(packageName);
+    await hideBlockOverlay();
     _currentlyBlockedPackage = null;
+    debugPrint('Unlocked $packageName for $mins min');
   }
 
-  /// Grant unlock for the currently blocked package
-  void grantCurrentUnlock({int minutes = 30}) {
-    if (_currentlyBlockedPackage != null) {
-      grantTemporaryUnlock(_currentlyBlockedPackage!, minutes: minutes);
+  Future<void> grantCurrentUnlock({int? minutes}) async {
+    final pkg = _currentlyBlockedPackage;
+    if (pkg != null) {
+      await grantTemporaryUnlock(pkg, minutes: minutes);
     } else {
-      hideBlockOverlay();
+      // Unlock all active blocked packages (fallback after in-app workout)
+      final mins = minutes ?? HiveService.getUnlockDurationMinutes();
+      for (final a in HiveService.getBlockedApps().where((x) => x.isActive)) {
+        if (a.packageName.isEmpty) continue;
+        await HiveService.setPackageUnlockUntil(
+          a.packageName,
+          DateTime.now().add(Duration(minutes: mins)),
+        );
+        await HiveService.resetPackageUsage(a.packageName);
+      }
+      await hideBlockOverlay();
+      _currentlyBlockedPackage = null;
     }
   }
-
-  String? get currentlyBlockedPackage => _currentlyBlockedPackage;
-
-  DateTime? get lastUnlockTime => _lastUnlockTime;
 
   void dispose() {
     stopListening();
