@@ -5,10 +5,12 @@ import ManagedSettings
 import UserNotifications
 
 /// Counts **active minutes** on selected apps (Screen Time).
-/// Timed mode: on threshold → **notification only** (no ManagedSettings shield).
-/// Immediate mode still shields from the main app.
+/// When the free-time threshold is reached:
+/// 1. Apply ManagedSettings shield (lock apps immediately)
+/// 2. Send a local notification
 class DeviceActivityMonitorExtension: DeviceActivityMonitor {
 
+  private let store = ManagedSettingsStore(named: .init("sweatlock"))
   private let defaults = UserDefaults(suiteName: "group.sweatlock.shared")
 
   override func intervalDidStart(for activity: DeviceActivityName) {
@@ -20,7 +22,7 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     super.intervalDidEnd(for: activity)
   }
 
-  /// Timed free window ended (active usage threshold reached)
+  /// Free-time threshold reached → lock apps + notify
   override func eventDidReachThreshold(
     _ event: DeviceActivityEvent.Name,
     activity: DeviceActivityName
@@ -34,19 +36,21 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
       postNotification(
         id: "sweatlock_warning",
         title: "SweatLock",
-        body: "You're almost out of free time on locked apps. Finish up or complete a workout soon."
+        body: "You're almost out of free time on locked apps."
       )
       return
     }
 
-    // Threshold reached: notify only — do NOT apply system shield
+    // Lock immediately
+    applyShield()
+
     defaults?.set(true, forKey: "pending_workout_open")
     defaults?.synchronize()
 
     postNotification(
       id: "sweatlock_lock",
-      title: "SweatLock — Time's up",
-      body: "You've used your free time. Open SweatLock and complete a workout to unlock more time.",
+      title: "SweatLock — Apps locked",
+      body: "Your free time is up. Open SweatLock and complete a workout to unlock.",
       openWorkout: true
     )
   }
@@ -59,8 +63,31 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     postNotification(
       id: "sweatlock_warning",
       title: "SweatLock",
-      body: "Locked apps free time is almost over."
+      body: "Locked apps will be restricted soon."
     )
+  }
+
+  private func applyShield() {
+    guard let data = defaults?.data(forKey: "family_selection"),
+          let selection = try? PropertyListDecoder().decode(
+            FamilyActivitySelection.self,
+            from: data
+          ) else {
+      NSLog("SweatLockMonitor: no family_selection — cannot shield")
+      return
+    }
+
+    let apps = selection.applicationTokens
+    let cats = selection.categoryTokens
+
+    if !apps.isEmpty {
+      store.shield.applications = apps
+    }
+    if !cats.isEmpty {
+      store.shield.applicationCategories = .specific(cats)
+    }
+
+    NSLog("SweatLockMonitor: shield APPLIED apps=\(apps.count) cats=\(cats.count)")
   }
 
   private func postNotification(
@@ -78,8 +105,6 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
       content.body = body
       content.sound = .default
       content.categoryIdentifier = "SWEATLOCK_WORKOUT"
-
-      // Tapping the notification opens the app (URL handled in AppDelegate)
       if openWorkout {
         content.userInfo = ["openWorkout": true, "deeplink": "sweatlock://workout"]
       }
