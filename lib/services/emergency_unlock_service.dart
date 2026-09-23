@@ -19,7 +19,7 @@ class EmergencyUnlockResult {
   });
 }
 
-/// One-tap unlock of all locked apps (limited uses per day).
+/// One-tap unlock of **all** locked apps (limited uses per day).
 class EmergencyUnlockService {
   EmergencyUnlockService._();
   static final instance = EmergencyUnlockService._();
@@ -27,7 +27,7 @@ class EmergencyUnlockService {
   Future<EmergencyUnlockResult> unlockAll() async {
     final remaining = HiveService.emergencyUnlocksRemaining();
     if (remaining <= 0) {
-      return EmergencyUnlockResult(
+      return const EmergencyUnlockResult(
         success: false,
         message: 'No emergency unlocks left today. Come back tomorrow.',
         remaining: 0,
@@ -36,21 +36,17 @@ class EmergencyUnlockService {
     }
 
     final mins = emergencyUnlockDurationMinutes;
-    final until = DateTime.now().add(Duration(minutes: mins));
 
     if (Platform.isAndroid) {
-      final apps = HiveService.getBlockedApps().where((a) => a.isActive);
-      for (final a in apps) {
-        if (a.packageName.isEmpty) continue;
-        await HiveService.setPackageUnlockUntil(a.packageName, until);
-        await HiveService.resetPackageUsage(a.packageName);
-      }
-      await BlockingService.instance.hideBlockOverlay();
-      await BlockingService.instance.grantCurrentUnlock(minutes: mins);
+      await BlockingService.instance.grantUnlockAll(minutes: mins);
     }
 
     if (Platform.isIOS) {
-      await IosNudgeService.instance.onWorkoutCompleted(unlockMinutes: mins);
+      // Emergency intentionally unlocks everything on iOS
+      await IosNudgeService.instance.onWorkoutCompleted(
+        unlockMinutes: mins,
+        unlockAll: true,
+      );
     }
 
     final progress = HiveService.getProgress();
