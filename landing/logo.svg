@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SweatLock">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#102216"/>
+      <stop offset="100%" stop-color="#0a120e"/>
+    </linearGradient>
+    <linearGradient id="g" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#3aff7a"/>
+      <stop offset="100%" stop-color="#14ec5b"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#14ec5b" stroke-opacity="0.25" stroke-width="8"/>
+  <!-- sweat / flame droplet -->
+  <path d="M256 96c-12 48-64 80-96 112 48 16 80 48 96 96 16-48 48-80 96-96-32-32-84-64-96-112z" fill="url(#g)"/>
+  <!-- lock body -->
+  <rect x="176" y="300" width="160" height="112" rx="28" fill="url(#g)"/>
+  <!-- lock shackle -->
+  <path d="M208 300v-28c0-26.5 21.5-48 48-48s48 21.5 48 48v28" fill="none" stroke="url(#g)" stroke-width="28" stroke-linecap="round"/>
+  <!-- keyhole -->
+  <circle cx="256" cy="344" r="14" fill="#0a120e"/>
+  <rect x="250" y="350" width="12" height="28" rx="4" fill="#0a120e"/>
+</svg>
