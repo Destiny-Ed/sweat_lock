@@ -12,6 +12,7 @@ import 'package:sweat_lock/data/models/blocked_app.dart';
 import 'package:sweat_lock/data/models/workout_session.dart';
 import 'package:sweat_lock/services/blocking_service.dart';
 import 'package:sweat_lock/services/ios_nudge_service.dart';
+import 'package:sweat_lock/services/music_service.dart';
 import 'package:uuid/uuid.dart';
 
 class WorkoutProvider extends ChangeNotifier {
@@ -40,8 +41,7 @@ class WorkoutProvider extends ChangeNotifier {
   String _playlistName = 'Workout Mix';
   String get playlistName => _playlistName;
 
-  String _playlistUrl =
-      'https://open.spotify.com/playlist/37i9dQZF1DX70RN3TfWWJh';
+  String _playlistUrl = MusicService.defaultSpotify;
   String get playlistUrl => _playlistUrl;
 
   String? _appName;
@@ -86,10 +86,23 @@ class WorkoutProvider extends ChangeNotifier {
     _exerciseType = exerciseType ??
         blocked?.exerciseType ??
         HiveService.getDefaultExercise();
-    _playlistName = playlistName ?? blocked?.playlistName ?? 'Workout Mix';
-    _playlistUrl = playlistUrl ??
-        blocked?.playlistUrl ??
-        'https://open.spotify.com/playlist/37i9dQZF1DX70RN3TfWWJh';
+
+    final genres = blocked?.musicGenres.isNotEmpty == true
+        ? blocked!.musicGenres
+        : HiveService.getMusicGenres();
+    final resolved = MusicService.instance.resolve(
+      genres: genres,
+      playlistName: playlistName ?? blocked?.playlistName,
+      playlistUrl: playlistUrl ?? blocked?.playlistUrl,
+    );
+    _playlistName = resolved.name;
+    _playlistUrl = resolved.url;
+    if (HiveService.getPreferYoutubeMusic() && genres.isNotEmpty) {
+      final g = genres.first.toLowerCase();
+      final yt = MusicService.youtubeByGenre[g];
+      if (yt != null) _playlistUrl = yt;
+    }
+
     _appName = appName ?? blocked?.appName;
 
     _sessionId = const Uuid().v4();
@@ -129,6 +142,8 @@ class WorkoutProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> openMusic() => MusicService.instance.openPlaylist(_playlistUrl);
+
   Future<void> startWorkout() async {
     if (controller == null || !controller!.value.isInitialized) return;
     if (_isWorkoutActive) return;
@@ -139,6 +154,9 @@ class WorkoutProvider extends ChangeNotifier {
     _lastRepAt = null;
     _feedback = 'Start $_exerciseType — keep form strict';
     notifyListeners();
+
+    // Kick off music in the background (Spotify / YT Music)
+    unawaited(openMusic());
 
     await controller!.startImageStream(_processCameraImage);
   }
@@ -176,7 +194,7 @@ class WorkoutProvider extends ChangeNotifier {
     if (Platform.isIOS) {
       await IosNudgeService.instance.onWorkoutCompleted(unlockMinutes: mins);
     } else if (Platform.isAndroid) {
-      BlockingService.instance.grantCurrentUnlock(minutes: mins);
+      await BlockingService.instance.grantCurrentUnlock(minutes: mins);
       await BlockingService.instance.startListening();
     }
   }
@@ -270,8 +288,7 @@ class WorkoutProvider extends ChangeNotifier {
     _lastRepAt = DateTime.now();
     _isDown = false;
     _currentReps++;
-    _feedback =
-        _currentReps >= _targetReps ? 'Great job!' : goodMsg;
+    _feedback = _currentReps >= _targetReps ? 'Great job!' : goodMsg;
     notifyListeners();
     if (_currentReps >= _targetReps) stopWorkout(completed: true);
   }
@@ -297,7 +314,6 @@ class WorkoutProvider extends ChangeNotifier {
       return;
     }
 
-    // Body roughly horizontal: shoulders near hip height (camera coords)
     final shoulderY = (ls!.y + rs!.y) / 2;
     final hipY = (lh!.y + rh!.y) / 2;
     final bodyFlat = (shoulderY - hipY).abs() < 120;
@@ -311,7 +327,6 @@ class WorkoutProvider extends ChangeNotifier {
     final rightAngle = _angle(rs, re!, rw!);
     final avgAngle = (leftAngle + rightAngle) / 2;
 
-    // Stricter: must go deep (< 85°) then fully extend (> 155°)
     if (avgAngle < 85 && !_isDown) {
       _isDown = true;
       _feedback = 'Push up!';
@@ -348,7 +363,6 @@ class WorkoutProvider extends ChangeNotifier {
     final rightAngle = _angle(rh!, rk!, ra!);
     final avgAngle = (leftAngle + rightAngle) / 2;
 
-    // Deep squat < 95°, stand > 160°
     if (avgAngle < 95 && !_isDown) {
       _isDown = true;
       _feedback = 'Drive up!';
@@ -374,13 +388,9 @@ class WorkoutProvider extends ChangeNotifier {
       return;
     }
 
-    final shoulderY = (ls!.y + rs!.y) / 2;
-    final hipY = (lh!.y + rh!.y) / 2;
-    final torso = _angle(ls, lh, lk!);
+    final torso = _angle(ls!, lh!, lk!);
 
-    // Down: nearly flat (large vertical gap small, torso open)
-    // Up: shoulders closer to hips in y, acute torso
-    if (torso > 140 && (shoulderY - hipY).abs() < 50 && !_isDown) {
+    if (torso > 140 && (ls.y - lh.y).abs() < 50 && !_isDown) {
       _isDown = true;
       _feedback = 'Curl up toward knees';
       notifyListeners();
