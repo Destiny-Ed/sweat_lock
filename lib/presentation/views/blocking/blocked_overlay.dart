@@ -9,6 +9,7 @@ import 'package:sweat_lock/presentation/views/reading/reading_unlock_screen.dart
 import 'package:sweat_lock/presentation/views/steps/steps_unlock_screen.dart';
 import 'package:sweat_lock/presentation/views/workout/workout_screen.dart';
 import 'package:sweat_lock/services/blocking_service.dart';
+import 'package:sweat_lock/services/schedule_service.dart';
 
 class BlockedOverlay extends StatelessWidget {
   const BlockedOverlay({super.key});
@@ -67,6 +68,8 @@ class _BlockedOverlayHome extends StatelessWidget {
     final stepGoal = isStepsPrimary
         ? (reps >= 100 ? reps : HiveService.getStepGoal())
         : HiveService.getStepGoal();
+    final unlockMins = HiveService.getUnlockDurationMinutes();
+    final inFocus = ScheduleService.instance.isInFocusWindow;
 
     return Scaffold(
       backgroundColor: AppColors.bgGreen,
@@ -98,16 +101,45 @@ class _BlockedOverlayHome extends StatelessWidget {
                   color: Colors.white,
                 ),
               ),
+              if (inFocus) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.red.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Focus schedule · hard lock',
+                    style: TextStyle(
+                      color: AppColors.red,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Text(
                 isStepsPrimary
-                    ? 'Walk $stepGoal steps to unlock.'
-                    : 'Earn unlock: workout, walk, or read + quiz.',
+                    ? 'Walk $stepGoal real steps. Then $appName opens for $unlockMins min only — then locks again.'
+                    : 'Real pose reps, a real walk, or read with a quiz — not hand-waving or skimming. Unlock is $unlockMins min for this app only.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                    fontSize: 17, color: Colors.white70, height: 1.4),
+                    fontSize: 15, color: Colors.white70, height: 1.45),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 8),
+              Text(
+                'After $unlockMins minutes free, monitoring restarts automatically.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.primaryGreen.withValues(alpha: 0.9),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 32),
               if (isStepsPrimary)
                 SizedBox(
                   width: double.infinity,
