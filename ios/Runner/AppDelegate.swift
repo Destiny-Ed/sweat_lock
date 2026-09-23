@@ -10,7 +10,6 @@ import UserNotifications
 @objc class AppDelegate: FlutterAppDelegate {
 
   private let center = AuthorizationCenter.shared
-  /// Named store shared with DeviceActivityMonitor extension
   private let store = ManagedSettingsStore(named: .init("sweatlock"))
   private let activityCenter = DeviceActivityCenter()
   private var selection = FamilyActivitySelection()
@@ -21,6 +20,7 @@ import UserNotifications
   private let selectionKey = "sweatlock_family_selection"
   private let sessionStartKey = "sweatlock_session_start"
   private let unlockUntilKey = "sweatlock_unlock_until"
+  private let modeKey = "sweatlock_block_mode"
   private let appGroupId = "group.sweatlock.shared"
 
   private var sharedDefaults: UserDefaults? {
@@ -35,6 +35,7 @@ import UserNotifications
 
     UNUserNotificationCenter.current().delegate = self
     requestNotificationPermission()
+    loadPersistedSelection()
 
     if let registrar = self.registrar(forPlugin: "SweatLockSelectedApps") {
       registrar.register(
@@ -42,8 +43,6 @@ import UserNotifications
         withId: "sweatlock/ios_selected_apps"
       )
     }
-
-    loadPersistedSelection()
 
     if let controller = window?.rootViewController as? FlutterViewController {
       let channel = FlutterMethodChannel(
@@ -107,6 +106,21 @@ import UserNotifications
           )
           result(true)
 
+        case "setBlockMode":
+          // Explicit mode switch from Settings
+          let args = call.arguments as? [String: Any]
+          let mode = args?["mode"] as? String ?? "timed"
+          let warning = args?["warningMinutes"] as? Int ?? 2
+          let lock = args?["lockMinutes"] as? Int ?? 5
+          let appName = args?["appName"] as? String ?? "Selected apps"
+          self.applyBlockMode(
+            mode: mode,
+            warningMinutes: warning,
+            lockMinutes: lock,
+            appName: appName
+          )
+          result(true)
+
         case "isShieldActive":
           let active = self.store.shield.applications != nil
             && !(self.store.shield.applications?.isEmpty ?? true)
@@ -129,6 +143,19 @@ import UserNotifications
 
     enforceShieldIfNeeded()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    // sweatlock://workout — open main flow after shield button
+    if url.scheme == "sweatlock" {
+      sharedDefaults?.set(true, forKey: "pending_workout_open")
+      return true
+    }
+    return super.application(app, open: url, options: options)
   }
 
   override func applicationDidBecomeActive(_ application: UIApplication) {
@@ -167,8 +194,6 @@ import UserNotifications
       .requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
   }
 
-  // MARK: - Persist selection (standard + App Group for extension)
-
   private func persistSelection() {
     if #available(iOS 15.0, *) {
       if let data = try? PropertyListEncoder().encode(selection) {
@@ -201,7 +226,8 @@ import UserNotifications
       let apps = selection.applicationTokens
       let cats = selection.categoryTokens
       if apps.isEmpty && cats.isEmpty {
-        print("SweatLock: no tokens to shield — select apps first")
+        clearShield()
+        print("SweatLock: selection empty → shield cleared")
         return
       }
       store.shield.applications = apps.isEmpty ? nil : apps
@@ -215,6 +241,35 @@ import UserNotifications
     store.shield.applicationCategories = nil
     store.shield.webDomains = nil
     print("SweatLock: shield CLEARED")
+  }
+
+  /// Settings toggled Immediate ↔ Timed
+  private func applyBlockMode(
+    mode: String,
+    warningMinutes: Int,
+    lockMinutes: Int,
+    appName: String
+  ) {
+    UserDefaults.standard.set(mode, forKey: modeKey)
+    sharedDefaults?.set(mode, forKey: modeKey)
+
+    // Always clear first when switching modes
+    clearShield()
+    cancelTimedLock()
+    UserDefaults.standard.removeObject(forKey: unlockUntilKey)
+
+    loadPersistedSelection()
+    if selection.applicationTokens.isEmpty && selection.categoryTokens.isEmpty {
+      print("SweatLock: mode set to \(mode) but no apps selected")
+      return
+    }
+
+    startTimedLock(
+      warningMinutes: warningMinutes,
+      lockMinutes: lockMinutes,
+      mode: mode,
+      appName: appName
+    )
   }
 
   private func grantTemporaryUnlock(minutes: Int) {
@@ -232,9 +287,13 @@ import UserNotifications
       afterSeconds: minutes * 60
     )
 
-    // Re-register device activity after unlock window
     DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(minutes * 60)) { [weak self] in
-      self?.applyShield()
+      let mode = UserDefaults.standard.string(forKey: self?.modeKey ?? "") ?? "immediate"
+      if mode == "immediate" {
+        self?.applyShield()
+      } else {
+        self?.applyShield()
+      }
     }
   }
 
@@ -247,23 +306,31 @@ import UserNotifications
     cancelTimedLock()
     loadPersistedSelection()
 
+    UserDefaults.standard.set(mode, forKey: modeKey)
+    sharedDefaults?.set(mode, forKey: modeKey)
+
+    // Empty selection → unlock everything
+    if selection.applicationTokens.isEmpty && selection.categoryTokens.isEmpty {
+      clearShield()
+      print("SweatLock: no selected apps — unlocked")
+      return
+    }
+
     let now = Date()
     UserDefaults.standard.set(now.timeIntervalSince1970, forKey: sessionStartKey)
     UserDefaults.standard.removeObject(forKey: unlockUntilKey)
     sharedDefaults?.set(now.timeIntervalSince1970, forKey: sessionStartKey)
+    sharedDefaults?.set(lockMinutes, forKey: "free_minutes")
     sharedDefaults?.removeObject(forKey: unlockUntilKey)
 
-    // Immediate mode: shield now
+    // IMMEDIATE: shield as long as apps are selected
     if mode == "immediate" {
       applyShield()
-      scheduleNotification(
-        id: "sweatlock_lock",
-        title: "SweatLock",
-        body: "\(appName) locked. Workout in SweatLock to unlock.",
-        afterSeconds: 1
-      )
       return
     }
+
+    // TIMED: remove shield now, lock after free window
+    clearShield()
 
     let warnAt = max(lockMinutes - warningMinutes, 1)
 
@@ -277,22 +344,19 @@ import UserNotifications
     scheduleNotification(
       id: "sweatlock_lock",
       title: "SweatLock — \(appName) locked",
-      body: "Complete a workout in SweatLock to unlock.",
+      body: "Open SweatLock and complete a workout to unlock.",
       afterSeconds: lockMinutes * 60
     )
 
-    // DeviceActivity threshold (works when app is killed — requires Monitor extension target)
     startDeviceActivityMonitoring(lockMinutes: lockMinutes, warningMinutes: warningMinutes)
 
-    // Fallback if process still alive
     DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(lockMinutes * 60)) { [weak self] in
       self?.applyShield()
     }
 
-    print("SweatLock: timed lock \(appName) warn@\(warnAt)m lock@\(lockMinutes)m")
+    print("SweatLock: TIMED free \(lockMinutes)m for \(appName)")
   }
 
-  /// Registers DeviceActivity events so the Monitor extension can shield when threshold hits
   private func startDeviceActivityMonitoring(lockMinutes: Int, warningMinutes: Int) {
     if #available(iOS 15.0, *) {
       loadPersistedSelection()
@@ -307,25 +371,19 @@ import UserNotifications
       )
 
       var events: [DeviceActivityEvent.Name: DeviceActivityEvent] = [:]
-
       events[.init("sweatlock.threshold")] = DeviceActivityEvent(
         applications: apps,
         categories: cats,
         threshold: DateComponents(minute: lockMinutes)
       )
 
-      if warningMinutes > 0 && lockMinutes > warningMinutes {
-        events[.init("sweatlock.warning")] = DeviceActivityEvent(
-          applications: apps,
-          categories: cats,
-          threshold: DateComponents(minute: max(lockMinutes - warningMinutes, 1))
-        )
-      }
-
       do {
         activityCenter.stopMonitoring([.init("sweatlock.daily")])
-        try activityCenter.startMonitoring(.init("sweatlock.daily"), during: schedule, events: events)
-        print("SweatLock: DeviceActivity monitoring started")
+        try activityCenter.startMonitoring(
+          .init("sweatlock.daily"),
+          during: schedule,
+          events: events
+        )
       } catch {
         print("SweatLock: DeviceActivity start failed: \(error)")
       }
@@ -359,7 +417,6 @@ import UserNotifications
     content.title = title
     content.body = body
     content.sound = .default
-
     let trigger = UNTimeIntervalNotificationTrigger(
       timeInterval: TimeInterval(max(afterSeconds, 1)),
       repeats: false
@@ -371,7 +428,10 @@ import UserNotifications
   private func enforceShieldIfNeeded() {
     if #available(iOS 15.0, *) {
       loadPersistedSelection()
+
+      // No apps selected → never shield
       if selection.applicationTokens.isEmpty && selection.categoryTokens.isEmpty {
+        clearShield()
         return
       }
 
@@ -382,11 +442,19 @@ import UserNotifications
         }
       }
 
+      let mode = UserDefaults.standard.string(forKey: modeKey) ?? "immediate"
+
+      if mode == "immediate" {
+        applyShield()
+        return
+      }
+
+      // Timed: only shield after free window
       if let start = UserDefaults.standard.object(forKey: sessionStartKey) as? Double {
-        let elapsed = Date().timeIntervalSince1970 - start
-        // Free window still active (default 5m — Flutter passes actual lock minutes via session)
         let freeMinutes = sharedDefaults?.integer(forKey: "free_minutes") ?? 5
+        let elapsed = Date().timeIntervalSince1970 - start
         if freeMinutes > 0 && elapsed < Double(freeMinutes * 60) {
+          clearShield()
           return
         }
       }
@@ -407,6 +475,28 @@ import UserNotifications
         onComplete: { [weak self] in
           guard let self = self else { return }
           self.persistSelection()
+
+          // Sync shield to current selection immediately
+          if self.selection.applicationTokens.isEmpty
+              && self.selection.categoryTokens.isEmpty {
+            self.clearShield()
+            self.cancelTimedLock()
+          } else {
+            let mode = UserDefaults.standard.string(forKey: self.modeKey) ?? "immediate"
+            if mode == "immediate" {
+              self.applyShield()
+            } else {
+              // Timed: free window starts now (no shield yet)
+              self.clearShield()
+              self.startTimedLock(
+                warningMinutes: 2,
+                lockMinutes: self.sharedDefaults?.integer(forKey: "free_minutes") ?? 5,
+                mode: "timed",
+                appName: "Selected apps"
+              )
+            }
+          }
+
           let apps = self.serializeSelection()
           self.pendingResult?(apps)
           self.pendingResult = nil
@@ -435,7 +525,6 @@ import UserNotifications
       index += 1
       let tokenData = try? PropertyListEncoder().encode(token)
       let tokenBase64 = tokenData?.base64EncodedString() ?? UUID().uuidString
-      // Display name fallback — real name shown via Label(token) in UI
       list.append([
         "id": String(tokenBase64.prefix(32)),
         "appName": "App \(index)",
