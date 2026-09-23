@@ -32,6 +32,7 @@ dependencies:
   in_app_review: ^2.0.10
   pedometer: ^4.1.1
   syncfusion_flutter_pdf: ^28.1.33
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:
