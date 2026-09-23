@@ -5,8 +5,9 @@ import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/presentation/views/main_activity.dart';
 import 'package:sweat_lock/presentation/widgets/social_button.dart';
+import 'package:sweat_lock/services/accountability_feed_service.dart';
 
-class WorkoutSuccessScreen extends StatelessWidget {
+class WorkoutSuccessScreen extends StatefulWidget {
   final int? reps;
   final String? exerciseType;
   final String? appName;
@@ -21,24 +22,67 @@ class WorkoutSuccessScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final progress = HiveService.getProgress();
+  State<WorkoutSuccessScreen> createState() => _WorkoutSuccessScreenState();
+}
+
+class _WorkoutSuccessScreenState extends State<WorkoutSuccessScreen> {
+  bool _queued = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _queueWin());
+  }
+
+  Future<void> _queueWin() async {
+    if (_queued || !widget.completed) return;
+    _queued = true;
+
     final sessions = HiveService.getAllSessions();
     final last = sessions.isNotEmpty ? sessions.first : null;
-
-    final doneReps = reps ?? last?.completedReps ?? defaultReps;
-    final exercise = exerciseType ?? last?.exerciseType ?? defaultExercise;
-    final unlockMins = HiveService.getUnlockDurationMinutes();
-    String unlockedApp = appName ?? 'your app';
-    if (appName == null && last?.unlockedAppId != null) {
-      final apps = HiveService.getBlockedApps();
-      for (final a in apps) {
+    final doneReps = widget.reps ?? last?.completedReps ?? defaultReps;
+    final exercise =
+        widget.exerciseType ?? last?.exerciseType ?? defaultExercise;
+    String unlockedApp = widget.appName ?? 'your app';
+    if (widget.appName == null && last?.unlockedAppId != null) {
+      for (final a in HiveService.getBlockedApps()) {
         if (a.id == last!.unlockedAppId) {
           unlockedApp = a.appName;
           break;
         }
       }
     }
+
+    await AccountabilityFeedService.instance.recordWin(
+      appName: unlockedApp,
+      challenge: '$doneReps $exercise',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = HiveService.getProgress();
+    final sessions = HiveService.getAllSessions();
+    final last = sessions.isNotEmpty ? sessions.first : null;
+
+    final doneReps = widget.reps ?? last?.completedReps ?? defaultReps;
+    final exercise =
+        widget.exerciseType ?? last?.exerciseType ?? defaultExercise;
+    final unlockMins = HiveService.getUnlockDurationMinutes();
+    String unlockedApp = widget.appName ?? 'your app';
+    if (widget.appName == null && last?.unlockedAppId != null) {
+      for (final a in HiveService.getBlockedApps()) {
+        if (a.id == last!.unlockedAppId) {
+          unlockedApp = a.appName;
+          break;
+        }
+      }
+    }
+
+    final shareText = AccountabilityFeedService.instance.buildWinShareText(
+      appName: unlockedApp,
+      challenge: '$doneReps $exercise',
+    );
 
     return Scaffold(
       appBar: AppBar(automaticallyImplyLeading: false),
@@ -70,7 +114,8 @@ class WorkoutSuccessScreen extends StatelessWidget {
                   ),
                   12.height(),
                   Text(
-                    'Only this app. When the timer ends, SweatLock locks it again automatically — no free pass forever.'.cap,
+                    'Only this app. When the timer ends, SweatLock locks it again automatically — no free pass forever.'
+                        .cap,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
@@ -100,12 +145,34 @@ class WorkoutSuccessScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  30.height(),
+                  16.height(),
+                  OutlinedButton.icon(
+                    onPressed: () =>
+                        AccountabilityFeedService.instance.shareText(shareText),
+                    icon: const Icon(Icons.ios_share,
+                        color: AppColors.primaryGreen),
+                    label: const Text(
+                      'Share this win',
+                      style: TextStyle(
+                        color: AppColors.primaryGreen,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppColors.primaryGreen),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                  24.height(),
                   CustomButton(
                     text: 'Done'.cap,
                     onTap: () {
                       if (Navigator.of(context).canPop()) {
-                        Navigator.of(context).pop(completed);
+                        Navigator.of(context).pop(widget.completed);
                       } else {
                         Navigator.pushAndRemoveUntil(
                           context,
