@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:sweat_lock/core/extensions.dart';
 import 'package:sweat_lock/core/theme.dart';
@@ -54,8 +55,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 15, vertical: 20),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 15,
+                    vertical: 20,
+                  ),
                   child: Column(
                     children: [
                       CircleAvatar(
@@ -66,9 +69,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           children: [
                             Text(
                               '${progress.totalReps}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineMedium
+                              style: Theme.of(context).textTheme.headlineMedium
                                   ?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
@@ -95,6 +96,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       15.height(),
+                      if (blocked.any((a) => a.bundleId.isNotEmpty))
+                        SizedBox(
+                          height: 120,
+                          width: 500,
+                          child: UiKitView(
+                            viewType: 'sweatlock/ios_selected_apps',
+                            creationParamsCodec: const StandardMessageCodec(),
+                            onPlatformViewCreated: (_) {},
+                          ),
+                        ),
                       if (blocked.isEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 20),
@@ -126,19 +137,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               child: ListTile(
                                 title: Text(
                                   app.appName,
-                                  style:
-                                      Theme.of(context).textTheme.titleLarge,
+                                  style: Theme.of(context).textTheme.titleLarge,
                                 ),
                                 subtitle: Text(
                                   'Blocked until ${app.requiredReps} ${app.exerciseType}',
-                                  style:
-                                      Theme.of(context).textTheme.titleSmall,
+                                  style: Theme.of(context).textTheme.titleSmall,
                                 ),
                                 leading: CircleAvatar(
                                   backgroundColor: AppColors.primaryGreen
                                       .withValues(alpha: 0.2),
                                   child: Text(
-                                    app.appName.isNotEmpty ? app.appName[0] : '?',
+                                    app.appName.isNotEmpty
+                                        ? app.appName[0]
+                                        : '?',
                                     style: const TextStyle(
                                       color: AppColors.primaryGreen,
                                       fontWeight: FontWeight.bold,

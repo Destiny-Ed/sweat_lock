@@ -84,7 +84,7 @@ class AppsOnboardingProvider extends ChangeNotifier {
     notifyListeners();
 
     final authorized = await IosNudgeService.instance.requestAuthorization();
-    if (!authorized) {
+    if (authorized) {
       _iosSelecting = false;
       notifyListeners();
       return;

@@ -166,6 +166,7 @@ class AppOnboardingStepOne extends StatelessWidget {
           if (vm.selectedBlockedApps.any((a) => a.bundleId.isNotEmpty))
             SizedBox(
               height: 120,
+              width: 500,
               child: UiKitView(
                 viewType: 'sweatlock/ios_selected_apps',
                 creationParamsCodec: const StandardMessageCodec(),
@@ -189,6 +190,7 @@ class AppOnboardingStepOne extends StatelessWidget {
                       subtitle: Text('${a.requiredReps} ${a.exerciseType}'),
                       trailing: IconButton(
                         icon: const Icon(Icons.close),
+                        color: AppColors.primaryGreen,
                         onPressed: () =>
                             vm.removeSelected(vm.configKey(a)),
                       ),

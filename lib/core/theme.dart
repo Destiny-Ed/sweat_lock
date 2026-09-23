@@ -26,6 +26,10 @@ class AppTheme {
       secondary: AppColors.primaryGreen,
     ),
     cardColor: AppColors.lightGreen,
+     listTileTheme: ListTileThemeData(
+      titleTextStyle: TextStyle(color: AppColors.white),
+      subtitleTextStyle: TextStyle(color: AppColors.white)
+    ),
     inputDecorationTheme: InputDecorationTheme(
       hintStyle: TextStyle(color: AppColors.bgWhite),
       labelStyle: TextStyle(color: AppColors.bgWhite),
@@ -107,6 +111,10 @@ class AppTheme {
       enabledBorder: OutlineInputBorder(
         borderSide: BorderSide(color: AppColors.bgGreen),
       ),
+    ),
+    listTileTheme: ListTileThemeData(
+      titleTextStyle: TextStyle(color: AppColors.black),
+      subtitleTextStyle: TextStyle(color: AppColors.black)
     ),
     textTheme: TextTheme(
       headlineLarge: GoogleFonts.inter(
