@@ -69,12 +69,12 @@ class WorkoutProvider extends ChangeNotifier {
     _isDown = false;
     _lastRepAt = null;
     _feedback = 'Get into position — full body in frame';
-    _unlockedAppId = unlockedAppId;
+    _unlockedAppId = unlockedAppId ?? HiveService.getLastBlockedAppId();
 
     BlockedApp? blocked;
-    if (unlockedAppId != null) {
+    if (_unlockedAppId != null) {
       for (final a in HiveService.getBlockedApps()) {
-        if (a.id == unlockedAppId) {
+        if (a.id == _unlockedAppId) {
           blocked = a;
           break;
         }
@@ -155,7 +155,6 @@ class WorkoutProvider extends ChangeNotifier {
     _feedback = 'Start $_exerciseType — keep form strict';
     notifyListeners();
 
-    // Kick off music in the background (Spotify / YT Music)
     unawaited(openMusic());
 
     await controller!.startImageStream(_processCameraImage);
@@ -189,13 +188,28 @@ class WorkoutProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Unlock **only** the app this workout was started for.
   Future<void> _grantUnlockAfterWorkout() async {
     final mins = HiveService.getUnlockDurationMinutes();
-    if (Platform.isIOS) {
-      await IosNudgeService.instance.onWorkoutCompleted(unlockMinutes: mins);
-    } else if (Platform.isAndroid) {
-      await BlockingService.instance.grantCurrentUnlock(minutes: mins);
+    final appId = _unlockedAppId ?? HiveService.getLastBlockedAppId();
+
+    if (Platform.isAndroid) {
+      await BlockingService.instance.grantUnlockForAppId(appId, minutes: mins);
       await BlockingService.instance.startListening();
+    } else if (Platform.isIOS) {
+      String? bundleId;
+      if (appId != null) {
+        for (final a in HiveService.getBlockedApps()) {
+          if (a.id == appId && a.bundleId.isNotEmpty) {
+            bundleId = a.bundleId;
+            break;
+          }
+        }
+      }
+      await IosNudgeService.instance.onWorkoutCompleted(
+        unlockMinutes: mins,
+        bundleId: bundleId,
+      );
     }
   }
 
