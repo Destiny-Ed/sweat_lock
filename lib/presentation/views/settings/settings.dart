@@ -35,6 +35,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late bool _notifications;
   late bool _preventUninstall;
   late bool _readingEnabled;
+  late bool _stepsEnabled;
+  late double _stepGoal;
   late bool _preferYoutube;
   late List<String> _genres;
   String? _pdfPath;
@@ -57,6 +59,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _notifications = HiveService.getNotificationsEnabled();
     _preventUninstall = HiveService.getPreventUninstall();
     _readingEnabled = HiveService.getReadingUnlockEnabled();
+    _stepsEnabled = HiveService.getStepsUnlockEnabled();
+    _stepGoal = HiveService.getStepGoal().toDouble();
     _preferYoutube = HiveService.getPreferYoutubeMusic();
     _genres = List<String>.from(HiveService.getMusicGenres());
     _pdfPath = HiveService.getReadingPdfPath();
@@ -112,7 +116,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('Emergency unlock?'),
           content: Text(
-            'Unlocks all locked apps for $emergencyUnlockDurationMinutes minutes without a workout.\n\n'
+            'Unlocks all locked apps for $emergencyUnlockDurationMinutes minutes without a challenge.\n\n'
             'You have $left use(s) left today.',
           ),
           actions: [
@@ -231,6 +235,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final pdfName =
         _pdfPath == null ? 'No book uploaded' : p.basename(_pdfPath!);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isStepsDefault = _exercise == 'steps';
 
     return Scaffold(
       appBar: AppBar(
@@ -247,7 +252,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 48),
         children: [
-          // Appearance
           _section('Appearance'),
           _card(
             child: Column(
@@ -271,7 +275,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          // Emergency
           _section('Emergency'),
           _card(
             child: Material(
@@ -320,7 +323,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          // Blocking
           _section('Blocking'),
           _card(
             child: Column(
@@ -384,7 +386,124 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          // Music
+          _section('Unlock challenges'),
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Default challenge type',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: supportedExercises.map((e) {
+                    final sel = e == _exercise;
+                    return ChoiceChip(
+                      label: Text(e == 'steps' ? 'steps (walk)' : e),
+                      selected: sel,
+                      selectedColor: AppColors.primaryGreen,
+                      labelStyle: TextStyle(
+                        color: sel
+                            ? Colors.black
+                            : Theme.of(context).textTheme.titleSmall?.color,
+                        fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                      onSelected: (_) async {
+                        setState(() => _exercise = e);
+                        await HiveService.setDefaultExercise(e);
+                        if (e == 'steps') {
+                          await HiveService.setStepsUnlockEnabled(true);
+                          setState(() => _stepsEnabled = true);
+                        }
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+                if (!isStepsDefault)
+                  _sliderRow(
+                    'Reps per session',
+                    _reps,
+                    5,
+                    100,
+                    (v) => setState(() => _reps = v),
+                    (v) => HiveService.setDefaultReps(v.round()),
+                  ),
+                if (isStepsDefault)
+                  Text(
+                    'Using walk challenge — set step goal below.',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+              ],
+            ),
+          ),
+
+          _section('Walk to unlock'),
+          _card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Allow steps instead of workout'),
+                  subtitle: const Text(
+                    'Show “Walk N steps” on the lock screen',
+                  ),
+                  value: _stepsEnabled,
+                  activeColor: AppColors.primaryGreen,
+                  onChanged: (v) async {
+                    setState(() => _stepsEnabled = v);
+                    await HiveService.setStepsUnlockEnabled(v);
+                  },
+                ),
+                if (_stepsEnabled)
+                  _sliderRow(
+                    'Step goal',
+                    _stepGoal,
+                    100,
+                    5000,
+                    (v) => setState(() => _stepGoal = v),
+                    (v) => HiveService.setStepGoal(v.round()),
+                  ),
+              ],
+            ),
+          ),
+
+          _section('Unlock by reading'),
+          _card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Allow reading + quiz'),
+                  subtitle: Text(
+                    'Read $requiredReadingPages pages (≥${readingDwellSecondsPerPage}s each), '
+                    'then pass $requiredQuizQuestions comprehension questions',
+                  ),
+                  value: _readingEnabled,
+                  activeColor: AppColors.primaryGreen,
+                  onChanged: (v) async {
+                    setState(() => _readingEnabled = v);
+                    await HiveService.setReadingUnlockEnabled(v);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.picture_as_pdf,
+                      color: AppColors.primaryGreen),
+                  title: const Text('Book PDF'),
+                  subtitle: Text(pdfName),
+                  trailing: TextButton(
+                    onPressed: _pickPdf,
+                    child: Text(_pdfPath == null ? 'Upload' : 'Replace'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           _section('Workout music'),
           _card(
             child: Column(
@@ -460,84 +579,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          // Reading
-          _section('Unlock by reading'),
-          _card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Allow reading instead of workout'),
-                  subtitle: Text(
-                    'Read $requiredReadingPages unique pages to unlock',
-                  ),
-                  value: _readingEnabled,
-                  activeColor: AppColors.primaryGreen,
-                  onChanged: (v) async {
-                    setState(() => _readingEnabled = v);
-                    await HiveService.setReadingUnlockEnabled(v);
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.picture_as_pdf,
-                      color: AppColors.primaryGreen),
-                  title: const Text('Book PDF'),
-                  subtitle: Text(pdfName),
-                  trailing: TextButton(
-                    onPressed: _pickPdf,
-                    child: Text(_pdfPath == null ? 'Upload' : 'Replace'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Exercise
-          _section('Exercise defaults'),
-          _card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sliderRow(
-                  'Reps per session',
-                  _reps,
-                  5,
-                  100,
-                  (v) => setState(() => _reps = v),
-                  (v) => HiveService.setDefaultReps(v.round()),
-                ),
-                const SizedBox(height: 8),
-                Text('Default exercise',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: supportedExercises.map((e) {
-                    final sel = e == _exercise;
-                    return ChoiceChip(
-                      label: Text(e),
-                      selected: sel,
-                      selectedColor: AppColors.primaryGreen,
-                      labelStyle: TextStyle(
-                        color: sel
-                            ? Colors.black
-                            : Theme.of(context).textTheme.titleSmall?.color,
-                        fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                      ),
-                      onSelected: (_) async {
-                        setState(() => _exercise = e);
-                        await HiveService.setDefaultExercise(e);
-                      },
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          ),
-
-          // Permissions
           _section('Permissions & security'),
           _card(
             child: Column(
@@ -605,7 +646,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          // About
           _section('About'),
           _card(
             child: Column(
@@ -655,7 +695,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             borderRadius: BorderRadius.circular(14),
             color: sel
                 ? AppColors.primaryGreen.withValues(alpha: 0.25)
-                : Theme.of(context).secondaryHeaderColor.withValues(alpha: 0.4),
+                : Theme.of(context)
+                    .secondaryHeaderColor
+                    .withValues(alpha: 0.4),
             border: Border.all(
               color: sel ? AppColors.primaryGreen : Colors.transparent,
               width: 1.5,
@@ -664,8 +706,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Column(
             children: [
               Icon(icon,
-                  size: 22,
-                  color: sel ? AppColors.primaryGreen : null),
+                  size: 22, color: sel ? AppColors.primaryGreen : null),
               const SizedBox(height: 4),
               Text(
                 label,
@@ -732,7 +773,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           value: value.clamp(min, max),
           min: min,
           max: max,
-          divisions: (max - min).round(),
+          divisions: (max - min).round() > 100 ? 50 : (max - min).round(),
           activeColor: AppColors.primaryGreen,
           onChanged: onChanged,
           onChangeEnd: onEnd,
