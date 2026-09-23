@@ -166,7 +166,6 @@ class HiveService {
     ) as int;
   }
 
-  /// Path to user-uploaded PDF for reading unlock.
   static Future<void> setReadingPdfPath(String? path) async {
     if (path == null || path.isEmpty) {
       await _settings.delete('reading_pdf_path');
@@ -185,6 +184,72 @@ class HiveService {
 
   static bool getReadingUnlockEnabled() {
     return _settings.get('reading_unlock_enabled', defaultValue: true) as bool;
+  }
+
+  // ---------- Android usage / unlock (shared with overlay isolate) ----------
+
+  static Future<void> setPackageUnlockUntil(String package, DateTime until) async {
+    await _settings.put('unlock_until_$package', until.millisecondsSinceEpoch);
+  }
+
+  static DateTime? getPackageUnlockUntil(String package) {
+    final v = _settings.get('unlock_until_$package');
+    if (v == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(v as int);
+  }
+
+  static Future<void> clearPackageUnlock(String package) async {
+    await _settings.delete('unlock_until_$package');
+  }
+
+  static bool isPackageTemporarilyUnlocked(String package) {
+    final until = getPackageUnlockUntil(package);
+    if (until == null) return false;
+    return DateTime.now().isBefore(until);
+  }
+
+  static int getUsageMs(String package) {
+    return _settings.get('usage_ms_$package', defaultValue: 0) as int;
+  }
+
+  static Future<void> setUsageMs(String package, int ms) async {
+    await _settings.put('usage_ms_$package', ms < 0 ? 0 : ms);
+  }
+
+  static int? getSessionStartMs(String package) {
+    return _settings.get('session_start_$package') as int?;
+  }
+
+  static Future<void> setSessionStartMs(String package, int? ms) async {
+    if (ms == null) {
+      await _settings.delete('session_start_$package');
+    } else {
+      await _settings.put('session_start_$package', ms);
+    }
+  }
+
+  static bool wasWarned(String package) {
+    return _settings.get('warned_$package', defaultValue: false) as bool;
+  }
+
+  static Future<void> setWarned(String package, bool value) async {
+    await _settings.put('warned_$package', value);
+  }
+
+  /// Live usage including current foreground session.
+  static int liveUsageMs(String package) {
+    var total = getUsageMs(package);
+    final start = getSessionStartMs(package);
+    if (start != null) {
+      total += DateTime.now().millisecondsSinceEpoch - start;
+    }
+    return total;
+  }
+
+  static Future<void> resetPackageUsage(String package) async {
+    await _settings.delete('usage_ms_$package');
+    await _settings.delete('session_start_$package');
+    await _settings.delete('warned_$package');
   }
 
   static Future<void> logout() async {
