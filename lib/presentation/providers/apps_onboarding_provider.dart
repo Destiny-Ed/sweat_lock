@@ -21,7 +21,6 @@ class AppsOnboardingProvider extends ChangeNotifier {
 
   int maxIndex = 3;
 
-  // ---------- Android installed apps ----------
   List<AppInfo> _installedApps = [];
   List<AppInfo> get installedApps => _installedApps;
   bool _loadingInstalled = false;
@@ -45,7 +44,6 @@ class AppsOnboardingProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ---------- Selection (key = packageName OR bundleId) ----------
   final Map<String, BlockedApp> _appConfigs = {};
   Map<String, BlockedApp> get appConfigs => Map.unmodifiable(_appConfigs);
   List<BlockedApp> get selectedBlockedApps => _appConfigs.values.toList();
@@ -77,7 +75,6 @@ class AppsOnboardingProvider extends ChangeNotifier {
   bool _iosSelecting = false;
   bool get iosSelecting => _iosSelecting;
 
-  /// iOS: open FamilyActivityPicker and merge into selection
   Future<void> pickIosApps() async {
     if (!Platform.isIOS) return;
     _iosSelecting = true;
@@ -121,27 +118,38 @@ class AppsOnboardingProvider extends ChangeNotifier {
   void setAppExercise(String key, String exerciseType) {
     final current = _appConfigs[key];
     if (current == null) return;
-    _appConfigs[key] = current.copyWith(exerciseType: exerciseType);
+    // Steps uses requiredReps as step goal
+    final reps = exerciseType == 'steps'
+        ? (current.requiredReps < 100 ? defaultStepGoal : current.requiredReps)
+        : (current.requiredReps > 200 ? defaultReps : current.requiredReps);
+    _appConfigs[key] = current.copyWith(
+      exerciseType: exerciseType,
+      requiredReps: reps,
+    );
     notifyListeners();
   }
 
   void setAppReps(String key, int reps) {
     final current = _appConfigs[key];
     if (current == null) return;
-    _appConfigs[key] = current.copyWith(requiredReps: reps.clamp(5, 100));
+    final isSteps = current.exerciseType == 'steps';
+    final clamped = isSteps ? reps.clamp(100, 20000) : reps.clamp(5, 100);
+    _appConfigs[key] = current.copyWith(requiredReps: clamped);
     notifyListeners();
   }
 
   void incrementReps(String key) {
     final current = _appConfigs[key];
     if (current == null) return;
-    setAppReps(key, current.requiredReps + 5);
+    final delta = current.exerciseType == 'steps' ? 100 : 5;
+    setAppReps(key, current.requiredReps + delta);
   }
 
   void decrementReps(String key) {
     final current = _appConfigs[key];
     if (current == null) return;
-    setAppReps(key, current.requiredReps - 5);
+    final delta = current.exerciseType == 'steps' ? 100 : 5;
+    setAppReps(key, current.requiredReps - delta);
   }
 
   String configKey(BlockedApp app) =>
@@ -163,17 +171,7 @@ class AppsOnboardingProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<String> musicGenres = [
-    'pop',
-    'hip hop / rap',
-    'rock',
-    'electronic / EDM',
-    'latin',
-    'R&B',
-    'indie',
-    'gospel',
-    'classical / instrumental',
-  ];
+  List<String> musicGenres = List.from(supportedMusicGenres);
 
   final List<String> _selectedGenres = [];
   List<String> get selectedGenres => List.unmodifiable(_selectedGenres);
@@ -190,11 +188,18 @@ class AppsOnboardingProvider extends ChangeNotifier {
 
   set selectedGenres(String value) => toggleGenre(value);
 
+  /// Includes steps — duration is step goal when isReps is false.
   List<WorkoutModel> workouts = [
     WorkoutModel(duration: 20, workout: 'push-ups', isReps: true),
     WorkoutModel(duration: 20, workout: 'sit-ups', isReps: true),
     WorkoutModel(duration: 20, workout: 'squats', isReps: true),
     WorkoutModel(duration: 20, workout: 'jumping jacks', isReps: true),
+    WorkoutModel(
+      duration: defaultStepGoal,
+      workout: 'steps',
+      isReps: false,
+      iconName: 'directions_walk',
+    ),
   ];
 
   String _dummyPlaylistFor(String seed) => '$seed Workout Mix';
@@ -247,6 +252,10 @@ class AppsOnboardingProvider extends ChangeNotifier {
     if (apps.isNotEmpty) {
       await HiveService.setDefaultReps(apps.first.requiredReps);
       await HiveService.setDefaultExercise(apps.first.exerciseType);
+      if (apps.first.exerciseType == 'steps') {
+        await HiveService.setStepGoal(apps.first.requiredReps);
+        await HiveService.setStepsUnlockEnabled(true);
+      }
     }
     await HiveService.setOnboardingComplete(true);
   }
