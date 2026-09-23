@@ -6,11 +6,13 @@ const String defaultExercise = 'push-ups';
 const int emergencyUnlocksPerDay = 1;
 const int unlockDurationMinutes = 30;
 
-/// iOS soft-nudge usage limit (minutes).
-/// Set low for testing — raise for production (e.g. 25).
-const int iosUsageLimitMinutes = 3;
+/// Free usage window before iOS system shield is applied (minutes).
+const int iosUsageLimitMinutes = 5;
 
-/// How often iOS checks usage (minutes)
+/// Show local notification this many minutes before the shield.
+const int iosWarningBeforeBlockMinutes = 2;
+
+/// How often Flutter re-checks (only while app is alive).
 const int iosUsageCheckIntervalMinutes = 1;
 
 const List<String> supportedExercises = [
