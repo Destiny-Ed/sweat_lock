@@ -7,8 +7,14 @@ import 'package:sweat_lock/core/theme.dart';
 
 class StatsBarChart extends StatefulWidget {
   final List<double>? weeklyValues;
+  /// 0=Mon … 6=Sun — highlight today's bar
+  final int? todayIndex;
 
-  const StatsBarChart({super.key, this.weeklyValues});
+  const StatsBarChart({
+    super.key,
+    this.weeklyValues,
+    this.todayIndex,
+  });
 
   List<Color> get availableColors => const <Color>[
         Colors.purple,
@@ -33,11 +39,15 @@ class StatsBarChartState extends State<StatsBarChart> {
   final Color barColor = AppColors.primaryGreen;
   final Color touchedBarColor = Colors.white;
 
+  static const _labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
   List<double> get _values {
     final v = widget.weeklyValues;
     if (v != null && v.length == 7) return v;
     return List<double>.filled(7, 0);
   }
+
+  int get _today => widget.todayIndex ?? (DateTime.now().weekday - 1);
 
   double get _weekTotal => _values.fold(0, (a, b) => a + b);
 
@@ -61,13 +71,19 @@ class StatsBarChartState extends State<StatsBarChart> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Last 7 days'.cap,
+                      'This week'.cap,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     10.height(),
                     Text(
                       '${_weekTotal.round()} reps',
                       style: Theme.of(context).textTheme.headlineLarge,
+                    ),
+                    Text(
+                      'Today · ${_labels[_today.clamp(0, 6)]}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.primaryGreen,
+                          ),
                     ),
                   ],
                 ),
@@ -112,16 +128,22 @@ class StatsBarChartState extends State<StatsBarChart> {
     Color? barColor,
     double width = 22,
   }) {
+    final isToday = x == _today;
     return BarChartGroupData(
       x: x,
       barRods: [
         BarChartRodData(
           toY: isTouched ? y + 1 : y,
-          color: isTouched ? touchedBarColor : (barColor ?? this.barColor),
+          color: isTouched
+              ? touchedBarColor
+              : (barColor ??
+                  (isToday ? AppColors.primaryGreen : this.barColor)),
           width: width,
-          borderSide: isTouched
-              ? BorderSide(color: touchedBarColor.darken(80))
-              : const BorderSide(color: Colors.white, width: 0),
+          borderSide: isToday
+              ? const BorderSide(color: Colors.white, width: 2)
+              : (isTouched
+                  ? BorderSide(color: touchedBarColor.darken(80))
+                  : const BorderSide(color: Colors.white, width: 0)),
           backDrawRodData: BackgroundBarChartRodData(
             show: true,
             toY: _maxY,
@@ -145,10 +167,11 @@ class StatsBarChartState extends State<StatsBarChart> {
         touchTooltipData: BarTouchTooltipData(
           getTooltipColor: (_) => Theme.of(context).cardColor,
           getTooltipItem: (group, groupIndex, rod, rodIndex) {
-            const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-            final day = group.x >= 0 && group.x < 7 ? labels[group.x] : '';
+            final day =
+                group.x >= 0 && group.x < 7 ? _labels[group.x] : '';
+            final todayMark = group.x == _today ? ' (today)' : '';
             return BarTooltipItem(
-              '$day\n${rod.toY.round()} reps',
+              '$day$todayMark\n${rod.toY.round()} reps',
               Theme.of(context).textTheme.titleMedium!,
             );
           },
@@ -186,10 +209,12 @@ class StatsBarChartState extends State<StatsBarChart> {
   }
 
   Widget getTitles(double value, TitleMeta meta) {
-    final style = Theme.of(context).textTheme.titleMedium!;
-    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    final text =
-        value.toInt() >= 0 && value.toInt() < 7 ? labels[value.toInt()] : '';
+    final i = value.toInt();
+    final style = Theme.of(context).textTheme.titleMedium!.copyWith(
+          fontWeight: i == _today ? FontWeight.bold : FontWeight.normal,
+          color: i == _today ? AppColors.primaryGreen : null,
+        );
+    final text = i >= 0 && i < 7 ? _labels[i] : '';
     return SideTitleWidget(
       meta: meta,
       space: 16,
