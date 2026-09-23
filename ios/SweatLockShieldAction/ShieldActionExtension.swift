@@ -1,35 +1,54 @@
-//
-//  ShieldActionExtension.swift
-//  SweatLockShieldAction
-//
-//  Created by Destiny Ed on 23/09/2026.
-//
-
 import ManagedSettings
+import Foundation
 
-// Override the functions below to customize the shield actions used in various situations.
-// The system provides a default response for any functions that your subclass doesn't override.
-// Make sure that your class name matches the NSExtensionPrincipalClass in your Info.plist.
+/// Handles taps on the custom shield buttons.
 class ShieldActionExtension: ShieldActionDelegate {
-    override func handle(action: ShieldAction, for application: ApplicationToken, completionHandler: @escaping (ShieldActionResponse) -> Void) {
-        // Handle the action as needed.
-        switch action {
-        case .primaryButtonPressed:
-            completionHandler(.close)
-        case .secondaryButtonPressed:
-            completionHandler(.defer)
-        @unknown default:
-            fatalError()
-        }
+
+  override func handle(
+    action: ShieldAction,
+    for application: ApplicationToken,
+    completionHandler: @escaping (ShieldActionResponse) -> Void
+  ) {
+    switch action {
+    case .primaryButtonPressed:
+      // Flag main app to open workout flow
+      UserDefaults(suiteName: "group.sweatlock.shared")?
+        .set(true, forKey: "pending_workout_open")
+      completionHandler(.defer)
+    case .secondaryButtonPressed:
+      completionHandler(.close)
+    @unknown default:
+      completionHandler(.close)
     }
-    
-    override func handle(action: ShieldAction, for webDomain: WebDomainToken, completionHandler: @escaping (ShieldActionResponse) -> Void) {
-        // Handle the action as needed.
-        completionHandler(.close)
+  }
+
+  override func handle(
+    action: ShieldAction,
+    for webDomain: WebDomainToken,
+    completionHandler: @escaping (ShieldActionResponse) -> Void
+  ) {
+    switch action {
+    case .primaryButtonPressed:
+      UserDefaults(suiteName: "group.sweatlock.shared")?
+        .set(true, forKey: "pending_workout_open")
+      completionHandler(.defer)
+    default:
+      completionHandler(.close)
     }
-    
-    override func handle(action: ShieldAction, for category: ActivityCategoryToken, completionHandler: @escaping (ShieldActionResponse) -> Void) {
-        // Handle the action as needed.
-        completionHandler(.close)
+  }
+
+  override func handle(
+    action: ShieldAction,
+    for category: ActivityCategoryToken,
+    completionHandler: @escaping (ShieldActionResponse) -> Void
+  ) {
+    switch action {
+    case .primaryButtonPressed:
+      UserDefaults(suiteName: "group.sweatlock.shared")?
+        .set(true, forKey: "pending_workout_open")
+      completionHandler(.defer)
+    default:
+      completionHandler(.close)
     }
+  }
 }
