@@ -1,43 +1,32 @@
 import DeviceActivity
-import ManagedSettings
+import FamilyControls
 import Foundation
+import ManagedSettings
 
-/// Runs even when SweatLock is killed. Applies / clears system shields.
+/// Runs even when SweatLock is killed or after reboot (once monitoring is registered).
+/// Applies ManagedSettings shields when usage threshold is reached.
 class DeviceActivityMonitorExtension: DeviceActivityMonitor {
 
-  // Must match App Group + name used in AppDelegate
   private let store = ManagedSettingsStore(named: .init("sweatlock"))
   private let defaults = UserDefaults(suiteName: "group.sweatlock.shared")
 
   override func intervalDidStart(for activity: DeviceActivityName) {
     super.intervalDidStart(for: activity)
-    // Optional: clear or apply depending on schedule design
   }
 
   override func intervalDidEnd(for activity: DeviceActivityName) {
     super.intervalDidEnd(for: activity)
   }
 
-  /// Called when usage threshold is reached (e.g. 5 minutes on selected apps)
   override func eventDidReachThreshold(
     _ event: DeviceActivityEvent.Name,
     activity: DeviceActivityName
   ) {
     super.eventDidReachThreshold(event, activity: activity)
 
-    if event.rawValue == "sweatlock.threshold" || event.rawValue == "threshold" {
+    let name = event.rawValue
+    if name == "sweatlock.threshold" || name == "threshold" {
       applyShieldFromDefaults()
-      postLocalNotification(
-        title: "SweatLock — Apps locked",
-        body: "Complete a workout in SweatLock to unlock."
-      )
-    }
-
-    if event.rawValue == "sweatlock.warning" || event.rawValue == "warning" {
-      postLocalNotification(
-        title: "SweatLock",
-        body: "Selected apps will be locked soon. Finish up!"
-      )
     }
   }
 
@@ -55,8 +44,6 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
             FamilyActivitySelection.self,
             from: data
           ) else {
-      // Fallback: if tokens stored as raw application set is unavailable,
-      // main app should have mirrored tokens into the store already.
       return
     }
 
@@ -65,11 +52,4 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     store.shield.applications = apps.isEmpty ? nil : apps
     store.shield.applicationCategories = cats.isEmpty ? nil : .specific(cats)
   }
-
-  private func postLocalNotification(title: String, body: String) {
-    // Extension notifications require proper setup; main app also schedules.
-    // Left minimal to avoid entitlement issues in extension-only context.
-  }
 }
-
-import FamilyControls
