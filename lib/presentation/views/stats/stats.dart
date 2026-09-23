@@ -102,7 +102,10 @@ class _StatsScreenState extends State<StatsScreen> {
                         ),
                       ),
                       10.height(),
-                      StatsBarChart(weeklyValues: stats.weeklyReps),
+                      StatsBarChart(
+                        weeklyValues: stats.weeklyReps,
+                        todayIndex: stats.todayIndex,
+                      ),
                       16.height(),
                       Text(
                         'Screen time cost'.cap,
