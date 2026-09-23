@@ -15,6 +15,9 @@ const int iosWarningBeforeBlockMinutes = 2;
 /// How often Flutter re-checks (only while app is alive).
 const int iosUsageCheckIntervalMinutes = 1;
 
+/// Unique PDF pages required to unlock instead of a workout.
+const int requiredReadingPages = 3;
+
 const List<String> supportedExercises = [
   'push-ups',
   'squats',
