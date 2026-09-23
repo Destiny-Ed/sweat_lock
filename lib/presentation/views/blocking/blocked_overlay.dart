@@ -6,10 +6,10 @@ import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/data/models/blocked_app.dart';
 import 'package:sweat_lock/presentation/providers/workout_provider.dart';
 import 'package:sweat_lock/presentation/views/reading/reading_unlock_screen.dart';
+import 'package:sweat_lock/presentation/views/steps/steps_unlock_screen.dart';
 import 'package:sweat_lock/presentation/views/workout/workout_screen.dart';
 import 'package:sweat_lock/services/blocking_service.dart';
 
-/// Full-screen overlay when a blocked app is opened (Android accessibility).
 class BlockedOverlay extends StatelessWidget {
   const BlockedOverlay({super.key});
 
@@ -54,6 +54,8 @@ class _BlockedOverlayHome extends StatelessWidget {
     final playlistUrl = matched?.playlistUrl;
     final canRead = HiveService.getReadingUnlockEnabled() &&
         (HiveService.getReadingPdfPath()?.isNotEmpty ?? false);
+    final canSteps = HiveService.getStepsUnlockEnabled();
+    final stepGoal = HiveService.getStepGoal();
 
     return Scaffold(
       backgroundColor: AppColors.bgGreen,
@@ -87,23 +89,11 @@ class _BlockedOverlayHome extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'Complete $reps $exercise'
-                '${canRead ? ' or read $requiredReadingPages pages' : ''}'
-                ' to unlock.',
+                'Earn unlock: workout, walk, or read + quiz.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 17, color: Colors.white70, height: 1.4),
+                style: const TextStyle(
+                    fontSize: 17, color: Colors.white70, height: 1.4),
               ),
-              if (matched != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Playlist: $playlistName',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.primaryGreen.withValues(alpha: 0.9),
-                  ),
-                ),
-              ],
               const SizedBox(height: 40),
               SizedBox(
                 width: double.infinity,
@@ -146,6 +136,47 @@ class _BlockedOverlayHome extends StatelessWidget {
                   ),
                 ),
               ),
+              if (canSteps) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final ok = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => StepsUnlockScreen(
+                            unlockedAppId: matched?.id,
+                            appName: appName,
+                            goal: stepGoal,
+                          ),
+                        ),
+                      );
+                      if (ok == true && package != null) {
+                        await BlockingService.instance.grantTemporaryUnlock(
+                          package,
+                          minutes: HiveService.getUnlockDurationMinutes(),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.directions_walk),
+                    label: Text(
+                      'Walk $stepGoal steps',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primaryGreen,
+                      side: const BorderSide(color: AppColors.primaryGreen),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               if (canRead) ...[
                 const SizedBox(height: 12),
                 SizedBox(
@@ -169,7 +200,7 @@ class _BlockedOverlayHome extends StatelessWidget {
                     },
                     icon: const Icon(Icons.menu_book),
                     label: Text(
-                      'Read $requiredReadingPages pages instead',
+                      'Read + quiz ($requiredReadingPages pages)',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -189,7 +220,6 @@ class _BlockedOverlayHome extends StatelessWidget {
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () async {
-                  // Dismiss overlay only — does NOT unlock (same as iOS later)
                   await BlockingService.instance.hideBlockOverlay();
                 },
                 child: const Text(
