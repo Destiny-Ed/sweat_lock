@@ -103,6 +103,22 @@ class HiveService {
     return _settings.get('default_exercise', defaultValue: 'push-ups') as String;
   }
 
+  static Future<void> setStepGoal(int steps) async {
+    await _settings.put('step_goal', steps.clamp(100, 20000));
+  }
+
+  static int getStepGoal() {
+    return _settings.get('step_goal', defaultValue: defaultStepGoal) as int;
+  }
+
+  static Future<void> setStepsUnlockEnabled(bool value) async {
+    await _settings.put('steps_unlock_enabled', value);
+  }
+
+  static bool getStepsUnlockEnabled() {
+    return _settings.get('steps_unlock_enabled', defaultValue: true) as bool;
+  }
+
   static Future<void> setMusicGenres(List<String> genres) async {
     await _settings.put('music_genres', genres);
   }
@@ -277,7 +293,6 @@ class HiveService {
     await _settings.delete('warned_$package');
   }
 
-  /// Last package that triggered the lock overlay (single-app unlock).
   static Future<void> setLastBlockedPackage(String? package) async {
     if (package == null || package.isEmpty) {
       await _settings.delete('last_blocked_package');
