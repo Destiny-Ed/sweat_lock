@@ -36,7 +36,7 @@ class _SelectAppsScreenState extends State<SelectAppsScreen> {
   Future<void> _handleIosSelect() async {
     setState(() => _iosLoading = true);
     final authorized = await IosNudgeService.instance.requestAuthorization();
-    if (authorized) {
+    if (!authorized) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
