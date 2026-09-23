@@ -71,16 +71,36 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
     setState(() => _unlocking = true);
 
     final mins = HiveService.getUnlockDurationMinutes();
-    if (Platform.isIOS) {
-      await IosNudgeService.instance.onWorkoutCompleted(unlockMinutes: mins);
-    } else if (Platform.isAndroid) {
-      BlockingService.instance.grantCurrentUnlock(minutes: mins);
+    final appId = widget.unlockedAppId ?? HiveService.getLastBlockedAppId();
+
+    if (Platform.isAndroid) {
+      await BlockingService.instance.grantUnlockForAppId(appId, minutes: mins);
       await BlockingService.instance.startListening();
+    } else if (Platform.isIOS) {
+      String? bundleId;
+      if (appId != null) {
+        for (final a in HiveService.getBlockedApps()) {
+          if (a.id == appId && a.bundleId.isNotEmpty) {
+            bundleId = a.bundleId;
+            break;
+          }
+        }
+      }
+      await IosNudgeService.instance.onWorkoutCompleted(
+        unlockMinutes: mins,
+        bundleId: bundleId,
+      );
     }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Unlocked — nice reading!')),
+      SnackBar(
+        content: Text(
+          widget.appName != null
+              ? '${widget.appName} unlocked — nice reading!'
+              : 'Unlocked — nice reading!',
+        ),
+      ),
     );
     Navigator.of(context).pop(true);
   }
