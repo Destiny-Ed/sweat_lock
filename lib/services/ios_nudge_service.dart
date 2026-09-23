@@ -75,7 +75,6 @@ class IosNudgeService {
           result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       _selectedIosApps = apps;
 
-      // Keep Android-only entries; REPLACE all iOS token apps with picker result
       final androidOnly = HiveService.getBlockedApps()
           .where((a) => a.packageName.isNotEmpty && a.bundleId.isEmpty)
           .toList();
@@ -102,7 +101,6 @@ class IosNudgeService {
 
       await HiveService.saveBlockedApps([...androidOnly, ...iosApps]);
 
-      // Empty picker → unlock; otherwise apply mode
       if (iosApps.isEmpty) {
         await clearShield();
         await stopMonitoring();
@@ -127,16 +125,12 @@ class IosNudgeService {
     final warning = HiveService.getWarningMinutes();
 
     try {
-      // Prefer setBlockMode so native always clears then applies correctly
       await _channel.invokeMethod('setBlockMode', {
         'warningMinutes': warning,
         'lockMinutes': lock,
         'mode': mode,
         'appName': _displayAppName,
       });
-      debugPrint(
-        'IosNudgeService: setBlockMode=$mode lock=${lock}m warn=${warning}m',
-      );
     } catch (e) {
       debugPrint('setBlockMode error: $e');
       try {
@@ -177,12 +171,21 @@ class IosNudgeService {
     }
   }
 
-  Future<void> onWorkoutCompleted({int? unlockMinutes}) async {
+  /// [unlockAll] true only for emergency. Otherwise prefer single-app via last locked index.
+  Future<void> onWorkoutCompleted({
+    int? unlockMinutes,
+    String? bundleId,
+    bool unlockAll = false,
+  }) async {
     if (!Platform.isIOS) return;
     final mins = unlockMinutes ?? HiveService.getUnlockDurationMinutes();
 
     try {
-      await _channel.invokeMethod('grantTemporaryUnlock', {'minutes': mins});
+      await _channel.invokeMethod('grantTemporaryUnlock', {
+        'minutes': mins,
+        'unlockAll': unlockAll,
+        if (bundleId != null) 'bundleId': bundleId,
+      });
       Future.delayed(Duration(minutes: mins), () async {
         await startMonitoring();
       });
@@ -196,7 +199,7 @@ class IosNudgeService {
   }
 
   Future<void> resetUsageForApp(String bundleId) async {
-    await onWorkoutCompleted();
+    await onWorkoutCompleted(bundleId: bundleId);
   }
 
   void triggerManualNudge({String? bundleId}) {
