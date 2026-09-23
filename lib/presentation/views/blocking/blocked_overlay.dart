@@ -42,6 +42,14 @@ class _BlockedOverlayHome extends StatelessWidget {
     return null;
   }
 
+  Future<void> _afterUnlock(String? package) async {
+    if (package == null) return;
+    await BlockingService.instance.grantTemporaryUnlock(
+      package,
+      minutes: HiveService.getUnlockDurationMinutes(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final package = BlockingService.instance.currentlyBlockedPackage;
@@ -52,10 +60,13 @@ class _BlockedOverlayHome extends StatelessWidget {
     final exercise = matched?.exerciseType ?? defaultExercise;
     final playlistName = matched?.playlistName ?? 'Workout Mix';
     final playlistUrl = matched?.playlistUrl;
+    final isStepsPrimary = exercise == 'steps';
     final canRead = HiveService.getReadingUnlockEnabled() &&
         (HiveService.getReadingPdfPath()?.isNotEmpty ?? false);
     final canSteps = HiveService.getStepsUnlockEnabled();
-    final stepGoal = HiveService.getStepGoal();
+    final stepGoal = isStepsPrimary
+        ? (reps >= 100 ? reps : HiveService.getStepGoal())
+        : HiveService.getStepGoal();
 
     return Scaffold(
       backgroundColor: AppColors.bgGreen,
@@ -89,54 +100,86 @@ class _BlockedOverlayHome extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'Earn unlock: workout, walk, or read + quiz.',
+                isStepsPrimary
+                    ? 'Walk $stepGoal steps to unlock.'
+                    : 'Earn unlock: workout, walk, or read + quiz.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     fontSize: 17, color: Colors.white70, height: 1.4),
               ),
               const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final completed = await Navigator.of(context).push<bool>(
-                      MaterialPageRoute(
-                        builder: (_) => WorkoutScreen(
-                          targetReps: reps,
-                          exerciseType: exercise,
-                          unlockedAppId: matched?.id,
-                          playlistName: playlistName,
-                          playlistUrl: playlistUrl,
-                          appName: appName,
+              if (isStepsPrimary)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final ok = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => StepsUnlockScreen(
+                            unlockedAppId: matched?.id,
+                            appName: appName,
+                            goal: stepGoal,
+                          ),
                         ),
-                      ),
-                    );
-                    if (completed == true && package != null) {
-                      await BlockingService.instance.grantTemporaryUnlock(
-                        package,
-                        minutes: HiveService.getUnlockDurationMinutes(),
                       );
-                    }
-                  },
-                  icon: const Icon(Icons.fitness_center),
-                  label: Text(
-                    'Workout · $reps $exercise',
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
+                      if (ok == true) await _afterUnlock(package);
+                    },
+                    icon: const Icon(Icons.directions_walk),
+                    label: Text(
+                      'Walk $stepGoal steps',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryGreen,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
                     ),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryGreen,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+                )
+              else
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final completed = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => WorkoutScreen(
+                            targetReps: reps,
+                            exerciseType: exercise,
+                            unlockedAppId: matched?.id,
+                            playlistName: playlistName,
+                            playlistUrl: playlistUrl,
+                            appName: appName,
+                          ),
+                        ),
+                      );
+                      if (completed == true) await _afterUnlock(package);
+                    },
+                    icon: const Icon(Icons.fitness_center),
+                    label: Text(
+                      'Workout · $reps $exercise',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryGreen,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              if (canSteps) ...[
+              if (!isStepsPrimary && canSteps) ...[
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -151,17 +194,51 @@ class _BlockedOverlayHome extends StatelessWidget {
                           ),
                         ),
                       );
-                      if (ok == true && package != null) {
-                        await BlockingService.instance.grantTemporaryUnlock(
-                          package,
-                          minutes: HiveService.getUnlockDurationMinutes(),
-                        );
-                      }
+                      if (ok == true) await _afterUnlock(package);
                     },
                     icon: const Icon(Icons.directions_walk),
                     label: Text(
                       'Walk $stepGoal steps',
                       style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primaryGreen,
+                      side: const BorderSide(color: AppColors.primaryGreen),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              if (isStepsPrimary) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final completed = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => WorkoutScreen(
+                            targetReps: defaultReps,
+                            exerciseType: 'push-ups',
+                            unlockedAppId: matched?.id,
+                            playlistName: playlistName,
+                            playlistUrl: playlistUrl,
+                            appName: appName,
+                          ),
+                        ),
+                      );
+                      if (completed == true) await _afterUnlock(package);
+                    },
+                    icon: const Icon(Icons.fitness_center),
+                    label: const Text(
+                      'Workout instead',
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
@@ -191,12 +268,7 @@ class _BlockedOverlayHome extends StatelessWidget {
                           ),
                         ),
                       );
-                      if (ok == true && package != null) {
-                        await BlockingService.instance.grantTemporaryUnlock(
-                          package,
-                          minutes: HiveService.getUnlockDurationMinutes(),
-                        );
-                      }
+                      if (ok == true) await _afterUnlock(package);
                     },
                     icon: const Icon(Icons.menu_book),
                     label: Text(
