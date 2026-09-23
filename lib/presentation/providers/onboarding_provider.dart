@@ -11,23 +11,25 @@ class OnboardingProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Pain-first story, then solution, then integrity — not a feature list.
   List<OnboardingModel> onboardingItems = [
     OnboardingModel(
       image: Assets.icons.google.path,
-      title: "Turn your doomscrolling into gains.",
+      title: '“Just five minutes.”',
       subtitle:
-          'Earn your screen time by completing quick, effective exercises.',
+          'You open the feed for a quick break after lunch. Forty-five minutes later the deep-work block is gone — and so is the afternoon.',
     ),
     OnboardingModel(
       image: Assets.icons.google.path,
-      title: "Build health before scrolling",
-      subtitle: 'A healthier you is just a workout away.',
+      title: 'The feed isn’t neutral.',
+      subtitle:
+          'Short video is engineered for the next hit. Willpower alone loses. You need a rule that fires before your brain negotiates.',
     ),
     OnboardingModel(
       image: Assets.icons.google.path,
-      title: "Turn your doomscrolling into gains.",
+      title: 'Earn the open.',
       subtitle:
-          'Earn your screen time by completing quick, effective exercises.',
+          'SweatLock locks the apps you choose. Unlock with real push-ups, a walk, or reading plus a quiz — not by waving at the camera or skimming pages.',
     ),
   ];
 }
