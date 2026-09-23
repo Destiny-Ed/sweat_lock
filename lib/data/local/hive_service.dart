@@ -232,7 +232,6 @@ class HiveService {
     return _settings.get('reading_unlock_enabled', defaultValue: true) as bool;
   }
 
-  // ---- Focus schedule ----
   static Future<void> setFocusSchedule(FocusSchedule schedule) async {
     await _settings.put('focus_schedule', schedule.toJson());
   }
@@ -243,13 +242,13 @@ class HiveService {
     return FocusSchedule.fromJson(Map<String, dynamic>.from(raw as Map));
   }
 
-  // ---- Accountability (local scaffold) ----
   static String getOrCreatePartnerCode() {
     final existing = _settings.get('partner_code') as String?;
     if (existing != null && existing.isNotEmpty) return existing;
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final rng = Random();
-    final code = List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join();
+    final code =
+        List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join();
     _settings.put('partner_code', code);
     return code;
   }
@@ -266,6 +265,70 @@ class HiveService {
 
   static String? getLinkedPartnerCode() =>
       _settings.get('linked_partner_code') as String?;
+
+  // ---- Public accountability feed ----
+  /// off | wins_only | wins_and_fails
+  static Future<void> setPublicAccountabilityMode(String mode) async {
+    await _settings.put('public_accountability_mode', mode);
+  }
+
+  static String getPublicAccountabilityMode() {
+    return _settings.get('public_accountability_mode', defaultValue: 'off')
+        as String;
+  }
+
+  static Future<void> setPublicDisplayName(String name) async {
+    await _settings.put('public_display_name', name);
+  }
+
+  static String getPublicDisplayName() {
+    return _settings.get('public_display_name', defaultValue: '') as String;
+  }
+
+  static Future<void> setPublicShowAppNames(bool value) async {
+    await _settings.put('public_show_app_names', value);
+  }
+
+  static bool getPublicShowAppNames() {
+    return _settings.get('public_show_app_names', defaultValue: true) as bool;
+  }
+
+  static Future<void> setPromptShareOnWin(bool value) async {
+    await _settings.put('prompt_share_on_win', value);
+  }
+
+  static bool getPromptShareOnWin() {
+    return _settings.get('prompt_share_on_win', defaultValue: true) as bool;
+  }
+
+  static Future<void> setLastFailPostDay(String dayKey) async {
+    await _settings.put('last_fail_post_day', dayKey);
+  }
+
+  static String? getLastFailPostDay() {
+    return _settings.get('last_fail_post_day') as String?;
+  }
+
+  static Future<void> addAccountabilityEvent(Map<String, dynamic> event) async {
+    final list = getAccountabilityEvents();
+    list.insert(0, event);
+    // keep last 50
+    final trimmed = list.take(50).toList();
+    await _settings.put('accountability_events', trimmed);
+  }
+
+  static List<Map<String, dynamic>> getAccountabilityEvents() {
+    final raw = _settings.get('accountability_events', defaultValue: <dynamic>[]);
+    return (raw as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  static List<Map<String, dynamic>> getPendingAccountabilityEvents() {
+    return getAccountabilityEvents()
+        .where((e) => e['posted'] != true)
+        .toList();
+  }
 
   static Future<void> setPackageUnlockUntil(
       String package, DateTime until) async {
