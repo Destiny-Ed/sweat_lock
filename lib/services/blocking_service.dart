@@ -8,8 +8,8 @@ import 'package:flutter_accessibility_service/constants.dart';
 import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/data/models/blocked_app.dart';
+import 'package:sweat_lock/services/schedule_service.dart';
 
-/// Android blocking via Accessibility — mirrors iOS immediate / timed modes.
 class BlockingService {
   static BlockingService? _instance;
   static BlockingService get instance => _instance ??= BlockingService._();
@@ -153,9 +153,13 @@ class BlockingService {
       return;
     }
 
-    final mode = HiveService.getBlockMode();
+    // Focus schedule forces hard lock (ignore free window).
+    final mode = ScheduleService.instance.effectiveBlockMode();
 
     if (mode == 'immediate') {
+      if (ScheduleService.instance.isInFocusWindow && fromTick == false) {
+        // optional: one-shot schedule notification handled lightly
+      }
       await _lockPackage(packageName, matched);
       return;
     }
@@ -176,7 +180,7 @@ class BlockingService {
         id: 2001,
         title: 'SweatLock — ${matched.appName} locked',
         body:
-            'Free time on ${matched.appName} is up. Complete a workout or read to unlock.',
+            'Free window ended. Workout, walk, or read + quiz to unlock ${matched.appName} only.',
       );
       await _lockPackage(packageName, matched);
       return;
@@ -238,15 +242,11 @@ class BlockingService {
     }
   }
 
-  /// Unlock **one** package only (after workout / reading for that app).
   Future<void> grantTemporaryUnlock(
     String packageName, {
     int? minutes,
   }) async {
-    if (packageName.isEmpty) {
-      debugPrint('grantTemporaryUnlock: empty package — skipped');
-      return;
-    }
+    if (packageName.isEmpty) return;
     final mins = minutes ?? HiveService.getUnlockDurationMinutes();
     final until = DateTime.now().add(Duration(minutes: mins));
     await HiveService.setPackageUnlockUntil(packageName, until);
@@ -255,13 +255,10 @@ class BlockingService {
     if (_currentlyBlockedPackage == packageName) {
       _currentlyBlockedPackage = null;
     }
-    debugPrint('Unlocked ONLY $packageName for $mins min');
   }
 
-  /// Resolve package from blocked-app id, then unlock that package only.
   Future<void> grantUnlockForAppId(String? appId, {int? minutes}) async {
     String? package;
-
     if (appId != null && appId.isNotEmpty) {
       for (final a in HiveService.getBlockedApps()) {
         if (a.id == appId && a.packageName.isNotEmpty) {
@@ -270,26 +267,19 @@ class BlockingService {
         }
       }
     }
-
     package ??= _currentlyBlockedPackage;
     package ??= HiveService.getLastBlockedPackage();
-
     if (package == null || package.isEmpty) {
-      debugPrint('grantUnlockForAppId: no target package — not unlocking all');
       await hideBlockOverlay();
       return;
     }
-
     await grantTemporaryUnlock(package, minutes: minutes);
   }
 
-  /// @deprecated Prefer [grantUnlockForAppId] / [grantTemporaryUnlock].
-  /// Never unlocks every app — only current/last blocked package.
   Future<void> grantCurrentUnlock({int? minutes}) async {
     await grantUnlockForAppId(HiveService.getLastBlockedAppId(), minutes: minutes);
   }
 
-  /// Emergency only: unlock every active blocked package.
   Future<void> grantUnlockAll({int? minutes}) async {
     final mins = minutes ?? HiveService.getUnlockDurationMinutes();
     final until = DateTime.now().add(Duration(minutes: mins));
