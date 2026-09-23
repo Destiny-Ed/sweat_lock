@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
+import 'package:sweat_lock/presentation/views/reading/reading_unlock_screen.dart';
 import 'package:sweat_lock/presentation/views/workout/workout_screen.dart';
 import 'package:sweat_lock/services/ios_nudge_service.dart';
 
-/// Full-screen soft nudge shown on iOS when usage limit is reached.
+/// Full-screen nudge when usage limit is reached.
 class IosNudgeScreen extends StatelessWidget {
   final String? bundleId;
   final String? appName;
@@ -30,10 +31,13 @@ class IosNudgeScreen extends StatelessWidget {
       }
     }
 
-    final displayName =
-        appName ?? matched?.appName ?? (apps.isNotEmpty ? apps.first.appName : 'This app');
+    final displayName = appName ??
+        matched?.appName ??
+        (apps.isNotEmpty ? apps.first.appName : 'This app');
     final reps = matched?.requiredReps ?? defaultReps;
     final exercise = matched?.exerciseType ?? defaultExercise;
+    final canRead = HiveService.getReadingUnlockEnabled() &&
+        (HiveService.getReadingPdfPath()?.isNotEmpty ?? false);
 
     return Scaffold(
       backgroundColor: AppColors.bgGreen,
@@ -67,8 +71,8 @@ class IosNudgeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                "You've been on $displayName for about $usageMinutes minutes.\n"
-                'Complete $reps $exercise to continue.',
+                "You've used about $usageMinutes min on $displayName.\n"
+                'Workout or read $requiredReadingPages pages to unlock.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 16,
@@ -87,6 +91,7 @@ class IosNudgeScreen extends StatelessWidget {
                           targetReps: reps,
                           exerciseType: exercise,
                           unlockedAppId: matched?.id,
+                          appName: displayName,
                         ),
                       ),
                     );
@@ -96,9 +101,12 @@ class IosNudgeScreen extends StatelessWidget {
                     if (context.mounted) Navigator.of(context).pop();
                   },
                   icon: const Icon(Icons.fitness_center),
-                  label: const Text(
-                    'Start Workout',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  label: Text(
+                    'Workout · $reps $exercise',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryGreen,
@@ -110,21 +118,53 @@ class IosNudgeScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              if (canRead) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final ok = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => ReadingUnlockScreen(
+                            unlockedAppId: matched?.id,
+                            appName: displayName,
+                          ),
+                        ),
+                      );
+                      if (ok == true && context.mounted) {
+                        if (bundleId != null && bundleId!.isNotEmpty) {
+                          await IosNudgeService.instance
+                              .resetUsageForApp(bundleId!);
+                        }
+                        if (context.mounted) Navigator.of(context).pop();
+                      }
+                    },
+                    icon: const Icon(Icons.menu_book),
+                    label: Text(
+                      'Read $requiredReadingPages pages instead',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primaryGreen,
+                      side: const BorderSide(color: AppColors.primaryGreen),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text(
                   'Remind me later',
                   style: TextStyle(color: Colors.white54),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Smart nudge · $displayName',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.primaryGreen.withValues(alpha: 0.7),
                 ),
               ),
             ],
