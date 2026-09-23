@@ -6,9 +6,11 @@ import 'package:sweat_lock/presentation/providers/blocking_provider.dart';
 import 'package:sweat_lock/presentation/providers/main_activity_provider.dart';
 import 'package:sweat_lock/presentation/providers/onboarding_provider.dart';
 import 'package:sweat_lock/presentation/providers/stats_provider.dart';
+import 'package:sweat_lock/presentation/providers/theme_provider.dart';
 import 'package:sweat_lock/presentation/providers/workout_provider.dart';
 
 List<SingleChildWidget> providers(BuildContext context) => [
+      ChangeNotifierProvider(create: (context) => ThemeProvider()),
       ChangeNotifierProvider(create: (context) => OnboardingProvider()),
       ChangeNotifierProvider(create: (context) => AppsOnboardingProvider()),
       ChangeNotifierProvider(create: (context) => MainActivityProvider()),
