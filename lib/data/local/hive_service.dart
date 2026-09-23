@@ -1,7 +1,10 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/data/models/blocked_app.dart';
+import 'package:sweat_lock/data/models/focus_schedule.dart';
 import 'package:sweat_lock/data/models/user_progress.dart';
 import 'package:sweat_lock/data/models/workout_session.dart';
 
@@ -228,6 +231,41 @@ class HiveService {
   static bool getReadingUnlockEnabled() {
     return _settings.get('reading_unlock_enabled', defaultValue: true) as bool;
   }
+
+  // ---- Focus schedule ----
+  static Future<void> setFocusSchedule(FocusSchedule schedule) async {
+    await _settings.put('focus_schedule', schedule.toJson());
+  }
+
+  static FocusSchedule getFocusSchedule() {
+    final raw = _settings.get('focus_schedule');
+    if (raw == null) return const FocusSchedule();
+    return FocusSchedule.fromJson(Map<String, dynamic>.from(raw as Map));
+  }
+
+  // ---- Accountability (local scaffold) ----
+  static String getOrCreatePartnerCode() {
+    final existing = _settings.get('partner_code') as String?;
+    if (existing != null && existing.isNotEmpty) return existing;
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rng = Random();
+    final code = List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join();
+    _settings.put('partner_code', code);
+    return code;
+  }
+
+  static String? getPartnerCode() => _settings.get('partner_code') as String?;
+
+  static Future<void> setLinkedPartnerCode(String? code) async {
+    if (code == null || code.isEmpty) {
+      await _settings.delete('linked_partner_code');
+    } else {
+      await _settings.put('linked_partner_code', code.toUpperCase());
+    }
+  }
+
+  static String? getLinkedPartnerCode() =>
+      _settings.get('linked_partner_code') as String?;
 
   static Future<void> setPackageUnlockUntil(
       String package, DateTime until) async {
