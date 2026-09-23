@@ -3,10 +3,11 @@ import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/presentation/views/reading/reading_unlock_screen.dart';
+import 'package:sweat_lock/presentation/views/steps/steps_unlock_screen.dart';
 import 'package:sweat_lock/presentation/views/workout/workout_screen.dart';
 import 'package:sweat_lock/services/ios_nudge_service.dart';
+import 'package:sweat_lock/services/schedule_service.dart';
 
-/// Full-screen nudge when usage limit is reached.
 class IosNudgeScreen extends StatelessWidget {
   final String? bundleId;
   final String? appName;
@@ -36,8 +37,13 @@ class IosNudgeScreen extends StatelessWidget {
         (apps.isNotEmpty ? apps.first.appName : 'This app');
     final reps = matched?.requiredReps ?? defaultReps;
     final exercise = matched?.exerciseType ?? defaultExercise;
+    final isSteps = exercise == 'steps';
     final canRead = HiveService.getReadingUnlockEnabled() &&
         (HiveService.getReadingPdfPath()?.isNotEmpty ?? false);
+    final canSteps = HiveService.getStepsUnlockEnabled();
+    final unlockMins = HiveService.getUnlockDurationMinutes();
+    final stepGoal = isSteps && reps >= 100 ? reps : HiveService.getStepGoal();
+    final inFocus = ScheduleService.instance.isInFocusWindow;
 
     return Scaffold(
       backgroundColor: AppColors.bgGreen,
@@ -69,13 +75,24 @@ class IosNudgeScreen extends StatelessWidget {
                   color: Colors.white,
                 ),
               ),
+              if (inFocus) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Focus schedule active',
+                  style: TextStyle(
+                    color: AppColors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Text(
-                "You've used about $usageMinutes min on $displayName.\n"
-                'Workout or read $requiredReadingPages pages to unlock.',
+                "About $usageMinutes min on $displayName.\n"
+                'Unlock with real form, steps, or read + quiz — not a skim.\n'
+                'Free window after unlock: $unlockMins minutes, then lock returns.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 16,
+                  fontSize: 15,
                   color: Colors.white70,
                   height: 1.45,
                 ),
@@ -85,24 +102,38 @@ class IosNudgeScreen extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => WorkoutScreen(
-                          targetReps: reps,
-                          exerciseType: exercise,
-                          unlockedAppId: matched?.id,
-                          appName: displayName,
+                    if (isSteps) {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => StepsUnlockScreen(
+                            unlockedAppId: matched?.id,
+                            appName: displayName,
+                            goal: stepGoal,
+                          ),
                         ),
-                      ),
-                    );
+                      );
+                    } else {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => WorkoutScreen(
+                            targetReps: reps,
+                            exerciseType: exercise,
+                            unlockedAppId: matched?.id,
+                            appName: displayName,
+                          ),
+                        ),
+                      );
+                    }
                     if (bundleId != null && bundleId!.isNotEmpty) {
                       await IosNudgeService.instance.resetUsageForApp(bundleId!);
                     }
                     if (context.mounted) Navigator.of(context).pop();
                   },
-                  icon: const Icon(Icons.fitness_center),
+                  icon: Icon(isSteps ? Icons.directions_walk : Icons.fitness_center),
                   label: Text(
-                    'Workout · $reps $exercise',
+                    isSteps
+                        ? 'Walk $stepGoal steps'
+                        : 'Workout · $reps $exercise',
                     style: const TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
@@ -118,6 +149,42 @@ class IosNudgeScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              if (!isSteps && canSteps) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final ok = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => StepsUnlockScreen(
+                            unlockedAppId: matched?.id,
+                            appName: displayName,
+                            goal: stepGoal,
+                          ),
+                        ),
+                      );
+                      if (ok == true && context.mounted) {
+                        if (bundleId != null && bundleId!.isNotEmpty) {
+                          await IosNudgeService.instance
+                              .resetUsageForApp(bundleId!);
+                        }
+                        if (context.mounted) Navigator.of(context).pop();
+                      }
+                    },
+                    icon: const Icon(Icons.directions_walk),
+                    label: Text('Walk $stepGoal steps'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primaryGreen,
+                      side: const BorderSide(color: AppColors.primaryGreen),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               if (canRead) ...[
                 const SizedBox(height: 12),
                 SizedBox(
@@ -142,7 +209,7 @@ class IosNudgeScreen extends StatelessWidget {
                     },
                     icon: const Icon(Icons.menu_book),
                     label: Text(
-                      'Read $requiredReadingPages pages instead',
+                      'Read + quiz ($requiredReadingPages pages)',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
