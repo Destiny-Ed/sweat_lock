@@ -18,14 +18,24 @@ const int iosWarningBeforeBlockMinutes = 2;
 /// How often Flutter re-checks (only while app is alive).
 const int iosUsageCheckIntervalMinutes = 1;
 
-/// Unique PDF pages required to unlock instead of a workout.
+/// Unique PDF pages required before the comprehension quiz.
 const int requiredReadingPages = 3;
+
+/// Minimum seconds the user must stay on each page (anti-skim).
+const int readingDwellSecondsPerPage = 25;
+
+/// Number of quiz questions; all must be correct to unlock.
+const int requiredQuizQuestions = 3;
+
+/// Default step goal to unlock an app.
+const int defaultStepGoal = 800;
 
 const List<String> supportedExercises = [
   'push-ups',
   'squats',
   'sit-ups',
   'jumping jacks',
+  'steps',
 ];
 
 const List<String> supportedMusicGenres = [

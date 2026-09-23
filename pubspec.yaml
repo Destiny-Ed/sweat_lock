@@ -30,6 +30,8 @@ dependencies:
   path: ^1.9.1
   pdfx: ^2.9.2
   in_app_review: ^2.0.10
+  pedometer: ^4.1.1
+  syncfusion_flutter_pdf: ^28.1.33
 
 dev_dependencies:
   flutter_test:
