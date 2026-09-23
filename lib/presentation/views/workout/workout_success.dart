@@ -29,7 +29,7 @@ class WorkoutSuccessScreen extends StatelessWidget {
     final doneReps = reps ?? last?.completedReps ?? defaultReps;
     final exercise = exerciseType ?? last?.exerciseType ?? defaultExercise;
     final unlockMins = HiveService.getUnlockDurationMinutes();
-    String unlockedApp = appName ?? 'your apps';
+    String unlockedApp = appName ?? 'your app';
     if (appName == null && last?.unlockedAppId != null) {
       final apps = HiveService.getBlockedApps();
       for (final a in apps) {
@@ -64,9 +64,15 @@ class WorkoutSuccessScreen extends StatelessWidget {
                   ),
                   20.height(),
                   Text(
-                    '$unlockedApp unlocked for $unlockMins mins'.cap,
+                    '$unlockedApp unlocked for $unlockMins min'.cap,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineLarge,
+                  ),
+                  12.height(),
+                  Text(
+                    'Only this app. When the timer ends, SweatLock locks it again automatically — no free pass forever.'.cap,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
                   20.height(),
                   Container(
@@ -99,7 +105,6 @@ class WorkoutSuccessScreen extends StatelessWidget {
                     text: 'Done'.cap,
                     onTap: () {
                       if (Navigator.of(context).canPop()) {
-                        // Overlay path: return true so unlock is granted
                         Navigator.of(context).pop(completed);
                       } else {
                         Navigator.pushAndRemoveUntil(
