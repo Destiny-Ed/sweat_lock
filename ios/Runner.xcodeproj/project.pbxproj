@@ -118,21 +118,21 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		FD3197033063F55D003EC577 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		FD3197033063F55D003EC577 /* Exceptions for "SweatLockMonitor" folder in "SweatLockMonitor" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = FD3196F33063F55D003EC577 /* SweatLockMonitor */;
 		};
-		FD3197163063F774003EC577 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		FD3197163063F774003EC577 /* Exceptions for "SweatLockShieldConfig" folder in "SweatLockShieldConfig" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = FD3197083063F774003EC577 /* SweatLockShieldConfig */;
 		};
-		FD3197293063F7D8003EC577 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		FD3197293063F7D8003EC577 /* Exceptions for "SweatLockShieldAction" folder in "SweatLockShieldAction" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -142,9 +142,42 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		FD3196F73063F55D003EC577 /* SweatLockMonitor */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (FD3197033063F55D003EC577 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = SweatLockMonitor; sourceTree = "<group>"; };
-		FD31970E3063F774003EC577 /* SweatLockShieldConfig */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (FD3197163063F774003EC577 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = SweatLockShieldConfig; sourceTree = "<group>"; };
-		FD3197213063F7D8003EC577 /* SweatLockShieldAction */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (FD3197293063F7D8003EC577 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = SweatLockShieldAction; sourceTree = "<group>"; };
+		FD3196F73063F55D003EC577 /* SweatLockMonitor */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				FD3197033063F55D003EC577 /* Exceptions for "SweatLockMonitor" folder in "SweatLockMonitor" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = SweatLockMonitor;
+			sourceTree = "<group>";
+		};
+		FD31970E3063F774003EC577 /* SweatLockShieldConfig */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				FD3197163063F774003EC577 /* Exceptions for "SweatLockShieldConfig" folder in "SweatLockShieldConfig" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = SweatLockShieldConfig;
+			sourceTree = "<group>";
+		};
+		FD3197213063F7D8003EC577 /* SweatLockShieldAction */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				FD3197293063F7D8003EC577 /* Exceptions for "SweatLockShieldAction" folder in "SweatLockShieldAction" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = SweatLockShieldAction;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -349,8 +382,6 @@
 				FD3196F73063F55D003EC577 /* SweatLockMonitor */,
 			);
 			name = SweatLockMonitor;
-			packageProductDependencies = (
-			);
 			productName = SweatLockMonitor;
 			productReference = FD3196F43063F55D003EC577 /* SweatLockMonitor.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -371,8 +402,6 @@
 				FD31970E3063F774003EC577 /* SweatLockShieldConfig */,
 			);
 			name = SweatLockShieldConfig;
-			packageProductDependencies = (
-			);
 			productName = SweatLockShieldConfig;
 			productReference = FD3197093063F774003EC577 /* SweatLockShieldConfig.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -393,8 +422,6 @@
 				FD3197213063F7D8003EC577 /* SweatLockShieldAction */,
 			);
 			name = SweatLockShieldAction;
-			packageProductDependencies = (
-			);
 			productName = SweatLockShieldAction;
 			productReference = FD31971F3063F7D8003EC577 /* SweatLockShieldAction.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -439,7 +466,7 @@
 			);
 			mainGroup = 97C146E51CF9000F007C117D;
 			packageReferences = (
-				781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage" */,
+				781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "FlutterGeneratedPluginSwiftPackage" */,
 			);
 			productRefGroup = 97C146EF1CF9000F007C117D /* Products */;
 			projectDirPath = "";
@@ -521,13 +548,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -586,13 +609,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -1433,7 +1452,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage" */ = {
+		781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "FlutterGeneratedPluginSwiftPackage" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage;
 		};
