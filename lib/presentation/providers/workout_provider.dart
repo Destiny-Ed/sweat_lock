@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:camera/camera.dart';
@@ -9,6 +10,8 @@ import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
 import 'package:sweat_lock/data/models/blocked_app.dart';
 import 'package:sweat_lock/data/models/workout_session.dart';
+import 'package:sweat_lock/services/blocking_service.dart';
+import 'package:sweat_lock/services/ios_nudge_service.dart';
 import 'package:uuid/uuid.dart';
 
 class WorkoutProvider extends ChangeNotifier {
@@ -64,7 +67,6 @@ class WorkoutProvider extends ChangeNotifier {
     _feedback = 'Get into position';
     _unlockedAppId = unlockedAppId;
 
-    // Resolve from saved BlockedApp when possible
     BlockedApp? blocked;
     if (unlockedAppId != null) {
       final apps = HiveService.getBlockedApps();
@@ -76,9 +78,11 @@ class WorkoutProvider extends ChangeNotifier {
       }
     }
 
-    _targetReps = targetReps ?? blocked?.requiredReps ?? HiveService.getDefaultReps();
-    _exerciseType =
-        exerciseType ?? blocked?.exerciseType ?? HiveService.getDefaultExercise();
+    _targetReps =
+        targetReps ?? blocked?.requiredReps ?? HiveService.getDefaultReps();
+    _exerciseType = exerciseType ??
+        blocked?.exerciseType ??
+        HiveService.getDefaultExercise();
     _playlistName = playlistName ?? blocked?.playlistName ?? 'Workout Mix';
     _playlistUrl = playlistUrl ??
         blocked?.playlistUrl ??
@@ -157,9 +161,25 @@ class WorkoutProvider extends ChangeNotifier {
 
     if (completed) {
       await _updateProgress();
+      await _grantUnlockAfterWorkout();
     }
 
     notifyListeners();
+  }
+
+  /// After workout: unlock apps and restart monitoring cycle
+  Future<void> _grantUnlockAfterWorkout() async {
+    if (Platform.isIOS) {
+      await IosNudgeService.instance.onWorkoutCompleted(
+        unlockMinutes: unlockDurationMinutes,
+      );
+    } else if (Platform.isAndroid) {
+      BlockingService.instance.grantCurrentUnlock(
+        minutes: unlockDurationMinutes,
+      );
+      // Keep accessibility listener running for next block
+      await BlockingService.instance.startListening();
+    }
   }
 
   Future<void> _updateProgress() async {
