@@ -13,8 +13,11 @@ import 'package:sweat_lock/presentation/views/onboarding/splash.dart';
 import 'package:sweat_lock/services/blocking_service.dart';
 import 'package:sweat_lock/services/ios_nudge_service.dart';
 
+/// Accessibility overlay entry (Android) — must init Hive before UI.
 @pragma('vm:entry-point')
-void accessibilityOverlay() {
+void accessibilityOverlay() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await HiveService.init();
   runApp(const BlockedOverlay());
 }
 
@@ -88,8 +91,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && Platform.isIOS) {
-      _screenTimeChannel.invokeMethod('consumePendingWorkout');
+    if (state == AppLifecycleState.resumed) {
+      if (Platform.isIOS) {
+        _screenTimeChannel.invokeMethod('consumePendingWorkout');
+      }
+      if (Platform.isAndroid) {
+        BlockingService.instance.checkAndStart();
+      }
     }
   }
 
