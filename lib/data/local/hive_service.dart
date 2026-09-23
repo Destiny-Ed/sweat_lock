@@ -23,7 +23,6 @@ class HiveService {
     _settings = await Hive.openBox(_settingsBox);
   }
 
-  // -------------------- Blocked Apps --------------------
   static Future<void> saveBlockedApps(List<BlockedApp> apps) async {
     final data = apps.map((a) => a.toJson()).toList();
     await _blockedApps.put('list', data);
@@ -49,7 +48,6 @@ class HiveService {
     await saveBlockedApps(apps);
   }
 
-  // -------------------- Workout Sessions --------------------
   static Future<void> saveSession(WorkoutSession session) async {
     await _sessions.put(session.id, session.toJson());
   }
@@ -70,7 +68,6 @@ class HiveService {
         .toList();
   }
 
-  // -------------------- User Progress --------------------
   static Future<void> saveProgress(UserProgress progress) async {
     await _progress.put('data', progress.toJson());
   }
@@ -81,7 +78,6 @@ class HiveService {
     return UserProgress.fromJson(Map<String, dynamic>.from(raw));
   }
 
-  // -------------------- Settings --------------------
   static Future<void> setOnboardingComplete(bool value) async {
     await _settings.put('onboarding_complete', value);
   }
@@ -115,7 +111,6 @@ class HiveService {
     return List<String>.from(raw);
   }
 
-  /// 'immediate' | 'timed'
   static Future<void> setBlockMode(String mode) async {
     await _settings.put('block_mode', mode);
   }
@@ -171,11 +166,32 @@ class HiveService {
     ) as int;
   }
 
-  /// Clear user session data on logout (keeps nothing sensitive locally)
+  /// Path to user-uploaded PDF for reading unlock.
+  static Future<void> setReadingPdfPath(String? path) async {
+    if (path == null || path.isEmpty) {
+      await _settings.delete('reading_pdf_path');
+    } else {
+      await _settings.put('reading_pdf_path', path);
+    }
+  }
+
+  static String? getReadingPdfPath() {
+    return _settings.get('reading_pdf_path') as String?;
+  }
+
+  static Future<void> setReadingUnlockEnabled(bool value) async {
+    await _settings.put('reading_unlock_enabled', value);
+  }
+
+  static bool getReadingUnlockEnabled() {
+    return _settings.get('reading_unlock_enabled', defaultValue: true) as bool;
+  }
+
   static Future<void> logout() async {
     await _settings.put('onboarding_complete', false);
     await _blockedApps.clear();
     await _sessions.clear();
     await _progress.clear();
+    await _settings.delete('reading_pdf_path');
   }
 }
