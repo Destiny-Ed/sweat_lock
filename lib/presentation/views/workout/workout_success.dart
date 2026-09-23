@@ -10,12 +10,14 @@ class WorkoutSuccessScreen extends StatelessWidget {
   final int? reps;
   final String? exerciseType;
   final String? appName;
+  final bool completed;
 
   const WorkoutSuccessScreen({
     super.key,
     this.reps,
     this.exerciseType,
     this.appName,
+    this.completed = true,
   });
 
   @override
@@ -26,6 +28,7 @@ class WorkoutSuccessScreen extends StatelessWidget {
 
     final doneReps = reps ?? last?.completedReps ?? defaultReps;
     final exercise = exerciseType ?? last?.exerciseType ?? defaultExercise;
+    final unlockMins = HiveService.getUnlockDurationMinutes();
     String unlockedApp = appName ?? 'your apps';
     if (appName == null && last?.unlockedAppId != null) {
       final apps = HiveService.getBlockedApps();
@@ -54,14 +57,14 @@ class WorkoutSuccessScreen extends StatelessWidget {
                         ?.copyWith(fontSize: 24),
                   ),
                   20.height(),
-                  Icon(
+                  const Icon(
                     Icons.check_circle,
                     size: 80,
                     color: AppColors.primaryGreen,
                   ),
                   20.height(),
                   Text(
-                    '$unlockedApp unlocked for $unlockDurationMinutes mins'.cap,
+                    '$unlockedApp unlocked for $unlockMins mins'.cap,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineLarge,
                   ),
@@ -91,61 +94,22 @@ class WorkoutSuccessScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  20.height(),
-                  Container(
-                    width: context.screenSize().width,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(15),
-                      color: Theme.of(context).secondaryHeaderColor,
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.share,
-                          color: Theme.of(context)
-                              .textTheme
-                              .titleSmall
-                              ?.color
-                              ?.darken(),
-                        ),
-                        8.height(),
-                        Text(
-                          '"I just did $doneReps $exercise to earn $unlockedApp"'
-                              .cap,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: AppColors.primaryGreen,
-                              ),
-                        ),
-                        Text(
-                          'your shareable story template'.cap,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                      ],
-                    ),
-                  ),
                   30.height(),
                   CustomButton(
-                    text: 'Back to home'.cap,
+                    text: 'Done'.cap,
                     onTap: () {
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const MainActivity(),
-                        ),
-                        (_) => false,
-                      );
-                    },
-                  ),
-                  12.height(),
-                  CustomButton(
-                    text: 'share to stories'.cap,
-                    bgColor: Theme.of(context).secondaryHeaderColor,
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Share coming soon')),
-                      );
+                      if (Navigator.of(context).canPop()) {
+                        // Overlay path: return true so unlock is granted
+                        Navigator.of(context).pop(completed);
+                      } else {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MainActivity(),
+                          ),
+                          (_) => false,
+                        );
+                      }
                     },
                   ),
                 ],
