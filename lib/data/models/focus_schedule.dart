@@ -27,14 +27,28 @@ class FocusSchedule {
         'weekdays': weekdays,
       };
 
-  factory FocusSchedule.fromJson(Map<String, dynamic> json) => FocusSchedule(
-        enabled: json['enabled'] as bool? ?? false,
-        startHour: json['startHour'] as int? ?? 9,
-        startMinute: json['startMinute'] as int? ?? 0,
-        endHour: json['endHour'] as int? ?? 17,
-        endMinute: json['endMinute'] as int? ?? 0,
-        weekdays: List<int>.from(json['weekdays'] as List? ?? [1, 2, 3, 4, 5]),
-      );
+  static int _i(dynamic v, int fallback) {
+    if (v == null) return fallback;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? fallback;
+  }
+
+  factory FocusSchedule.fromJson(Map<String, dynamic> json) {
+    final daysRaw = json['weekdays'];
+    List<int> days = const [1, 2, 3, 4, 5];
+    if (daysRaw is List && daysRaw.isNotEmpty) {
+      days = daysRaw.map((e) => _i(e, 1)).toList();
+    }
+    return FocusSchedule(
+      enabled: json['enabled'] == true,
+      startHour: _i(json['startHour'], 9).clamp(0, 23),
+      startMinute: _i(json['startMinute'], 0).clamp(0, 59),
+      endHour: _i(json['endHour'], 17).clamp(0, 23),
+      endMinute: _i(json['endMinute'], 0).clamp(0, 59),
+      weekdays: days,
+    );
+  }
 
   FocusSchedule copyWith({
     bool? enabled,
@@ -54,13 +68,17 @@ class FocusSchedule {
     );
   }
 
-  String get label {
-    final days = weekdays.map(_dayShort).join(', ');
+  String get timeRangeLabel {
     final s =
         '${startHour.toString().padLeft(2, '0')}:${startMinute.toString().padLeft(2, '0')}';
     final e =
         '${endHour.toString().padLeft(2, '0')}:${endMinute.toString().padLeft(2, '0')}';
-    return '$days · $s–$e';
+    return '$s – $e';
+  }
+
+  String get label {
+    final days = weekdays.map(_dayShort).join(', ');
+    return '$days · $timeRangeLabel';
   }
 
   static String _dayShort(int d) =>
