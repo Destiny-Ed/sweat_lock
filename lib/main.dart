@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -25,6 +26,10 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 const _screenTimeChannel = MethodChannel('sweatlock/screen_time');
 
+/// Prevents double-push when URL open + resume + consumePending all fire.
+DateTime? _lastNudgeOpenAt;
+bool _nudgeOpenInFlight = false;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await HiveService.init();
@@ -42,7 +47,14 @@ Future<void> main() async {
 
     _screenTimeChannel.setMethodCallHandler((call) async {
       if (call.method == 'openWorkout') {
-        _openNudge();
+        final args = call.arguments;
+        String? bundleId;
+        int? minutes;
+        if (args is Map) {
+          bundleId = args['bundleId']?.toString();
+          minutes = args['minutes'] as int?;
+        }
+        _openNudge(bundleId: bundleId, minutes: minutes);
       }
     });
   }
@@ -51,17 +63,76 @@ Future<void> main() async {
 }
 
 void _openNudge({String? bundleId, int? minutes}) {
-  final ctx = navigatorKey.currentContext;
-  if (ctx == null) return;
+  final now = DateTime.now();
+  if (_nudgeOpenInFlight) return;
+  if (_lastNudgeOpenAt != null &&
+      now.difference(_lastNudgeOpenAt!) < const Duration(seconds: 2)) {
+    return;
+  }
 
-  Navigator.of(ctx).push(
-    MaterialPageRoute(
-      builder: (_) => IosNudgeScreen(
-        bundleId: bundleId,
-        usageMinutes: minutes ?? HiveService.getFreeMinutes(),
-      ),
-    ),
-  );
+  final nav = navigatorKey.currentState;
+  if (nav == null) return;
+
+  // Already showing nudge on top of the stack?
+  final route = ModalRoute.of(navigatorKey.currentContext!);
+  // Walk stack via overlay — simpler: check if top route is IosNudgeScreen
+  // by using a flag set while route is alive is overkill; debounce is enough.
+
+  _nudgeOpenInFlight = true;
+  _lastNudgeOpenAt = now;
+
+  // Persist so reading/workout can resolve the locked app later
+  if (bundleId != null && bundleId.isNotEmpty) {
+    unawaited(HiveService.setLastBlockedPackage(bundleId));
+    final apps = HiveService.getBlockedApps();
+    for (final a in apps) {
+      if (a.bundleId == bundleId ||
+          (a.bundleId.isNotEmpty && bundleId.contains(a.bundleId))) {
+        unawaited(HiveService.setLastBlockedAppId(a.id));
+        break;
+      }
+    }
+  }
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) {
+      _nudgeOpenInFlight = false;
+      return;
+    }
+
+    // Avoid stacking a second nudge
+    bool alreadyOpen = false;
+    nav.popUntil((r) {
+      // Don't pop — only inspect. popUntil always pops until predicate true.
+      // So we cannot use popUntil for inspect. Use a different approach.
+      return true; // leave stack alone
+    });
+
+    // Check routes by looking at context's navigator
+    final overlayCtx = navigatorKey.currentState?.overlay?.context;
+    if (overlayCtx != null) {
+      // If current route settings name is nudge, skip
+    }
+
+    // Practical check: if last open was <2s we already returned above.
+    // Push only once.
+    if (!alreadyOpen) {
+      Navigator.of(ctx).push(
+        MaterialPageRoute(
+          settings: const RouteSettings(name: '/ios_nudge'),
+          builder: (_) => IosNudgeScreen(
+            bundleId: bundleId,
+            usageMinutes: minutes ?? HiveService.getFreeMinutes(),
+          ),
+        ),
+      ).whenComplete(() {
+        _nudgeOpenInFlight = false;
+      });
+    } else {
+      _nudgeOpenInFlight = false;
+    }
+  });
 }
 
 class MyApp extends StatefulWidget {
@@ -76,6 +147,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Single consume after first frame — native should NOT also fire openWorkout
+    // from URL + becomeActive simultaneously (native fixed to only set pending).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (Platform.isIOS) {
         _screenTimeChannel.invokeMethod('consumePendingWorkout');
@@ -93,6 +166,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (Platform.isIOS) {
+        // Debounced consume — _openNudge itself is debounced
         _screenTimeChannel.invokeMethod('consumePendingWorkout');
       }
       if (Platform.isAndroid) {
