@@ -26,7 +26,6 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 const _screenTimeChannel = MethodChannel('sweatlock/screen_time');
 
-/// Prevents double-push when URL open + resume + consumePending all fire.
 DateTime? _lastNudgeOpenAt;
 bool _nudgeOpenInFlight = false;
 
@@ -73,21 +72,23 @@ void _openNudge({String? bundleId, int? minutes}) {
   final nav = navigatorKey.currentState;
   if (nav == null) return;
 
-  // Already showing nudge on top of the stack?
-  final route = ModalRoute.of(navigatorKey.currentContext!);
-  // Walk stack via overlay — simpler: check if top route is IosNudgeScreen
-  // by using a flag set while route is alive is overkill; debounce is enough.
+  // Skip if nudge is already the top route
+  final topName = nav.widget.toString();
+  // Use route settings via overlay history if available
+  try {
+    final history = nav.widget.pages; // may not exist on Navigator
+    // ignore: avoid_dynamic_calls
+  } catch (_) {}
 
   _nudgeOpenInFlight = true;
   _lastNudgeOpenAt = now;
 
-  // Persist so reading/workout can resolve the locked app later
   if (bundleId != null && bundleId.isNotEmpty) {
     unawaited(HiveService.setLastBlockedPackage(bundleId));
-    final apps = HiveService.getBlockedApps();
-    for (final a in apps) {
+    for (final a in HiveService.getBlockedApps()) {
       if (a.bundleId == bundleId ||
-          (a.bundleId.isNotEmpty && bundleId.contains(a.bundleId))) {
+          (a.bundleId.isNotEmpty &&
+              (bundleId.contains(a.bundleId) || a.bundleId.contains(bundleId)))) {
         unawaited(HiveService.setLastBlockedAppId(a.id));
         break;
       }
@@ -101,37 +102,26 @@ void _openNudge({String? bundleId, int? minutes}) {
       return;
     }
 
-    // Avoid stacking a second nudge
-    bool alreadyOpen = false;
-    nav.popUntil((r) {
-      // Don't pop — only inspect. popUntil always pops until predicate true.
-      // So we cannot use popUntil for inspect. Use a different approach.
-      return true; // leave stack alone
-    });
-
-    // Check routes by looking at context's navigator
-    final overlayCtx = navigatorKey.currentState?.overlay?.context;
-    if (overlayCtx != null) {
-      // If current route settings name is nudge, skip
-    }
-
-    // Practical check: if last open was <2s we already returned above.
-    // Push only once.
-    if (!alreadyOpen) {
-      Navigator.of(ctx).push(
-        MaterialPageRoute(
-          settings: const RouteSettings(name: '/ios_nudge'),
-          builder: (_) => IosNudgeScreen(
-            bundleId: bundleId,
-            usageMinutes: minutes ?? HiveService.getFreeMinutes(),
-          ),
-        ),
-      ).whenComplete(() {
-        _nudgeOpenInFlight = false;
-      });
-    } else {
+    // If top route is already /ios_nudge, do not push again
+    final top = ModalRoute.of(ctx);
+    if (top?.settings.name == '/ios_nudge') {
       _nudgeOpenInFlight = false;
+      return;
     }
+
+    Navigator.of(ctx)
+        .push(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/ios_nudge'),
+        builder: (_) => IosNudgeScreen(
+          bundleId: bundleId,
+          usageMinutes: minutes ?? HiveService.getFreeMinutes(),
+        ),
+      ),
+    )
+        .whenComplete(() {
+      _nudgeOpenInFlight = false;
+    });
   });
 }
 
@@ -147,8 +137,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Single consume after first frame — native should NOT also fire openWorkout
-    // from URL + becomeActive simultaneously (native fixed to only set pending).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (Platform.isIOS) {
         _screenTimeChannel.invokeMethod('consumePendingWorkout');
@@ -166,7 +154,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (Platform.isIOS) {
-        // Debounced consume — _openNudge itself is debounced
         _screenTimeChannel.invokeMethod('consumePendingWorkout');
       }
       if (Platform.isAndroid) {
