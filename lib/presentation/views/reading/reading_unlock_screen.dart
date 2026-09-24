@@ -6,6 +6,7 @@ import 'package:pdfx/pdfx.dart';
 import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
+import 'package:sweat_lock/data/models/blocked_app.dart';
 import 'package:sweat_lock/services/blocking_service.dart';
 import 'package:sweat_lock/services/ios_nudge_service.dart';
 import 'package:sweat_lock/services/reading_quiz_service.dart';
@@ -91,7 +92,7 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
           setState(() => _qualifiedPages.add(p));
         }
       } else {
-        setState(() {}); // refresh countdown
+        setState(() {});
       }
     });
   }
@@ -100,6 +101,29 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
     final spent = _dwellMs[_currentPage] ?? 0;
     final left = ((_dwellNeed - spent) / 1000).ceil();
     return left < 0 ? 0 : left;
+  }
+
+  /// Resolve the single app this reading session should unlock.
+  BlockedApp? _resolveTargetApp() {
+    final apps = HiveService.getBlockedApps();
+    final id = widget.unlockedAppId ?? HiveService.getLastBlockedAppId();
+    if (id != null && id.isNotEmpty) {
+      for (final a in apps) {
+        if (a.id == id) return a;
+      }
+    }
+    final pkg = HiveService.getLastBlockedPackage();
+    if (pkg != null && pkg.isNotEmpty) {
+      for (final a in apps) {
+        if (a.packageName == pkg ||
+            a.bundleId == pkg ||
+            pkg.contains(a.packageName) ||
+            (a.packageName.isNotEmpty && a.packageName.contains(pkg))) {
+          return a;
+        }
+      }
+    }
+    return null;
   }
 
   Future<void> _startQuiz() async {
@@ -142,34 +166,64 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
     setState(() => _unlocking = true);
 
     final mins = HiveService.getUnlockDurationMinutes();
-    final appId = widget.unlockedAppId ?? HiveService.getLastBlockedAppId();
+    final target = _resolveTargetApp();
+    final displayName = widget.appName ?? target?.appName ?? 'App';
+
+    if (target == null) {
+      // Refuse to unlock everything — user must have a target app.
+      if (Platform.isAndroid) {
+        await BlockingService.instance.hideBlockOverlay();
+      }
+      if (!mounted) return;
+      setState(() => _unlocking = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not identify which app to unlock. Open it again from the lock screen.',
+          ),
+        ),
+      );
+      return;
+    }
 
     if (Platform.isAndroid) {
-      await BlockingService.instance.grantUnlockForAppId(appId, minutes: mins);
+      final package = target.packageName.isNotEmpty
+          ? target.packageName
+          : HiveService.getLastBlockedPackage();
+      if (package == null || package.isEmpty) {
+        if (!mounted) return;
+        setState(() => _unlocking = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Missing package for unlock')),
+        );
+        return;
+      }
+      // Scoped: one package only — never grantUnlockAll
+      await BlockingService.instance.grantTemporaryUnlock(
+        package,
+        minutes: mins,
+      );
       await BlockingService.instance.startListening();
     } else if (Platform.isIOS) {
-      String? bundleId;
-      if (appId != null) {
-        for (final a in HiveService.getBlockedApps()) {
-          if (a.id == appId && a.bundleId.isNotEmpty) {
-            bundleId = a.bundleId;
-            break;
-          }
-        }
-      }
+      final bundleId = target.bundleId.isNotEmpty
+          ? target.bundleId
+          : null;
+      // unlockAll must stay false
       await IosNudgeService.instance.onWorkoutCompleted(
         unlockMinutes: mins,
         bundleId: bundleId,
+        unlockAll: false,
       );
     }
+
+    await HiveService.incrementReadingUnlocks();
+    await HiveService.addEstimatedMinutesSaved(mins);
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          widget.appName != null
-              ? '${widget.appName} unlocked — quiz passed!'
-              : 'Unlocked — quiz passed!',
+          '$displayName unlocked for $mins min — quiz passed!',
         ),
       ),
     );
@@ -294,13 +348,17 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
   }
 
   Widget _buildQuiz() {
+    final target = _resolveTargetApp();
+    final name = widget.appName ?? target?.appName;
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const Text(
-          'Answer every question correctly to unlock. '
-          'Questions are generated from the pages you just read.',
-          style: TextStyle(color: Colors.white70),
+        Text(
+          name != null
+              ? 'Answer every question correctly to unlock $name only.'
+              : 'Answer every question correctly to unlock the app that was locked.',
+          style: const TextStyle(color: Colors.white70),
         ),
         const SizedBox(height: 16),
         ...List.generate(_questions.length, (i) {
@@ -366,7 +424,9 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
               ),
             ),
             child: Text(
-              _quizAllCorrect ? 'Unlock app' : 'Answer all correctly',
+              _quizAllCorrect
+                  ? (name != null ? 'Unlock $name' : 'Unlock app')
+                  : 'Answer all correctly',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ),
