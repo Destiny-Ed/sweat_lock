@@ -180,7 +180,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   activeColor: AppColors.primaryGreen,
                   onChanged: (v) async {
                     setState(() => _blockMode = v!);
-                    await HiveService.setBlockMode(v);
+                    await HiveService.setBlockMode(v ?? _blockMode);
                     await _apply();
                   },
                 ),
@@ -191,7 +191,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   activeColor: AppColors.primaryGreen,
                   onChanged: (v) async {
                     setState(() => _blockMode = v!);
-                    await HiveService.setBlockMode(v);
+                    await HiveService.setBlockMode(v ?? _blockMode);
                     await _apply();
                   },
                 ),
