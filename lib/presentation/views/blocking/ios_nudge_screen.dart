@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:sweat_lock/core/constant.dart';
 import 'package:sweat_lock/core/theme.dart';
 import 'package:sweat_lock/data/local/hive_service.dart';
+import 'package:sweat_lock/data/models/blocked_app.dart';
 import 'package:sweat_lock/presentation/views/reading/reading_unlock_screen.dart';
 import 'package:sweat_lock/presentation/views/steps/steps_unlock_screen.dart';
 import 'package:sweat_lock/presentation/views/workout/workout_screen.dart';
 import 'package:sweat_lock/services/ios_nudge_service.dart';
 import 'package:sweat_lock/services/schedule_service.dart';
 
-class IosNudgeScreen extends StatelessWidget {
+class IosNudgeScreen extends StatefulWidget {
   final String? bundleId;
   final String? appName;
   final int usageMinutes;
@@ -21,20 +22,83 @@ class IosNudgeScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final apps = HiveService.getBlockedApps();
-    dynamic matched;
-    for (final a in apps) {
-      if (bundleId != null &&
-          (a.bundleId == bundleId || a.bundleId.contains(bundleId!))) {
-        matched = a;
-        break;
+  State<IosNudgeScreen> createState() => _IosNudgeScreenState();
+}
+
+class _IosNudgeScreenState extends State<IosNudgeScreen> {
+  BlockedApp? _matched;
+  late String _displayName;
+
+  @override
+  void initState() {
+    super.initState();
+    _matched = _resolveMatched();
+    _displayName = widget.appName ??
+        _matched?.appName ??
+        (HiveService.getBlockedApps().isNotEmpty
+            ? HiveService.getBlockedApps().first.appName
+            : 'This app');
+
+    // Always persist so reading/workout/quiz can unlock THIS app
+    final m = _matched;
+    if (m != null) {
+      HiveService.setLastBlockedAppId(m.id);
+      if (m.bundleId.isNotEmpty) {
+        HiveService.setLastBlockedPackage(m.bundleId);
+      } else if (m.packageName.isNotEmpty) {
+        HiveService.setLastBlockedPackage(m.packageName);
+      }
+    } else if (widget.bundleId != null && widget.bundleId!.isNotEmpty) {
+      HiveService.setLastBlockedPackage(widget.bundleId!);
+    }
+  }
+
+  BlockedApp? _resolveMatched() {
+    final apps = HiveService.getBlockedApps().where((a) => a.isActive).toList();
+    final bid = widget.bundleId;
+
+    if (bid != null && bid.isNotEmpty) {
+      for (final a in apps) {
+        if (a.bundleId == bid ||
+            (a.bundleId.isNotEmpty &&
+                (a.bundleId.contains(bid) || bid.contains(a.bundleId)))) {
+          return a;
+        }
       }
     }
 
-    final displayName = appName ??
-        matched?.appName ??
-        (apps.isNotEmpty ? apps.first.appName : 'This app');
+    final lastId = HiveService.getLastBlockedAppId();
+    if (lastId != null) {
+      for (final a in apps) {
+        if (a.id == lastId) return a;
+      }
+    }
+
+    final lastPkg = HiveService.getLastBlockedPackage();
+    if (lastPkg != null && lastPkg.isNotEmpty) {
+      for (final a in apps) {
+        if (a.bundleId == lastPkg ||
+            a.packageName == lastPkg ||
+            (a.bundleId.isNotEmpty && lastPkg.contains(a.bundleId))) {
+          return a;
+        }
+      }
+    }
+
+    // Single locked app → that one
+    if (apps.length == 1) return apps.first;
+
+    // Prefer any iOS app with a bundle id
+    for (final a in apps) {
+      if (a.bundleId.isNotEmpty) return a;
+    }
+    return apps.isNotEmpty ? apps.first : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final matched = _matched;
+    final displayName = _displayName;
     final reps = matched?.requiredReps ?? defaultReps;
     final exercise = matched?.exerciseType ?? defaultExercise;
     final isSteps = exercise == 'steps';
@@ -44,6 +108,7 @@ class IosNudgeScreen extends StatelessWidget {
     final unlockMins = HiveService.getUnlockDurationMinutes();
     final stepGoal = isSteps && reps >= 100 ? reps : HiveService.getStepGoal();
     final inFocus = ScheduleService.instance.isInFocusWindow;
+    final appId = matched?.id;
 
     return Scaffold(
       backgroundColor: AppColors.bgGreen,
@@ -87,7 +152,7 @@ class IosNudgeScreen extends StatelessWidget {
               ],
               const SizedBox(height: 12),
               Text(
-                "About $usageMinutes min on $displayName.\n"
+                'About ${widget.usageMinutes} min on $displayName.\n'
                 'Unlock with real form, steps, or read + quiz — not a skim.\n'
                 'Free window after unlock: $unlockMins minutes, then lock returns.',
                 textAlign: TextAlign.center,
@@ -106,7 +171,7 @@ class IosNudgeScreen extends StatelessWidget {
                       await Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => StepsUnlockScreen(
-                            unlockedAppId: matched?.id,
+                            unlockedAppId: appId,
                             appName: displayName,
                             goal: stepGoal,
                           ),
@@ -118,18 +183,20 @@ class IosNudgeScreen extends StatelessWidget {
                           builder: (_) => WorkoutScreen(
                             targetReps: reps,
                             exerciseType: exercise,
-                            unlockedAppId: matched?.id,
+                            unlockedAppId: appId,
                             appName: displayName,
                           ),
                         ),
                       );
                     }
-                    if (bundleId != null && bundleId!.isNotEmpty) {
-                      await IosNudgeService.instance.resetUsageForApp(bundleId!);
+                    if (widget.bundleId != null && widget.bundleId!.isNotEmpty) {
+                      await IosNudgeService.instance
+                          .resetUsageForApp(widget.bundleId!);
                     }
                     if (context.mounted) Navigator.of(context).pop();
                   },
-                  icon: Icon(isSteps ? Icons.directions_walk : Icons.fitness_center),
+                  icon: Icon(
+                      isSteps ? Icons.directions_walk : Icons.fitness_center),
                   label: Text(
                     isSteps
                         ? 'Walk $stepGoal steps'
@@ -158,16 +225,17 @@ class IosNudgeScreen extends StatelessWidget {
                       final ok = await Navigator.of(context).push<bool>(
                         MaterialPageRoute(
                           builder: (_) => StepsUnlockScreen(
-                            unlockedAppId: matched?.id,
+                            unlockedAppId: appId,
                             appName: displayName,
                             goal: stepGoal,
                           ),
                         ),
                       );
                       if (ok == true && context.mounted) {
-                        if (bundleId != null && bundleId!.isNotEmpty) {
+                        if (widget.bundleId != null &&
+                            widget.bundleId!.isNotEmpty) {
                           await IosNudgeService.instance
-                              .resetUsageForApp(bundleId!);
+                              .resetUsageForApp(widget.bundleId!);
                         }
                         if (context.mounted) Navigator.of(context).pop();
                       }
@@ -194,15 +262,16 @@ class IosNudgeScreen extends StatelessWidget {
                       final ok = await Navigator.of(context).push<bool>(
                         MaterialPageRoute(
                           builder: (_) => ReadingUnlockScreen(
-                            unlockedAppId: matched?.id,
+                            unlockedAppId: appId,
                             appName: displayName,
                           ),
                         ),
                       );
                       if (ok == true && context.mounted) {
-                        if (bundleId != null && bundleId!.isNotEmpty) {
+                        if (widget.bundleId != null &&
+                            widget.bundleId!.isNotEmpty) {
                           await IosNudgeService.instance
-                              .resetUsageForApp(bundleId!);
+                              .resetUsageForApp(widget.bundleId!);
                         }
                         if (context.mounted) Navigator.of(context).pop();
                       }
