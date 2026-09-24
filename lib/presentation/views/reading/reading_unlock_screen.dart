@@ -105,25 +105,42 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
 
   /// Resolve the single app this reading session should unlock.
   BlockedApp? _resolveTargetApp() {
-    final apps = HiveService.getBlockedApps();
+    final apps = HiveService.getBlockedApps().where((a) => a.isActive).toList();
+
     final id = widget.unlockedAppId ?? HiveService.getLastBlockedAppId();
     if (id != null && id.isNotEmpty) {
       for (final a in apps) {
         if (a.id == id) return a;
       }
     }
+
     final pkg = HiveService.getLastBlockedPackage();
     if (pkg != null && pkg.isNotEmpty) {
       for (final a in apps) {
         if (a.packageName == pkg ||
             a.bundleId == pkg ||
-            pkg.contains(a.packageName) ||
-            (a.packageName.isNotEmpty && a.packageName.contains(pkg))) {
+            (a.bundleId.isNotEmpty &&
+                (pkg.contains(a.bundleId) || a.bundleId.contains(pkg))) ||
+            (a.packageName.isNotEmpty &&
+                (pkg.contains(a.packageName) || a.packageName.contains(pkg)))) {
           return a;
         }
       }
     }
-    return null;
+
+    final name = widget.appName;
+    if (name != null && name.isNotEmpty) {
+      for (final a in apps) {
+        if (a.appName.toLowerCase() == name.toLowerCase()) return a;
+      }
+    }
+
+    if (apps.length == 1) return apps.first;
+
+    for (final a in apps) {
+      if (a.bundleId.isNotEmpty) return a;
+    }
+    return apps.isNotEmpty ? apps.first : null;
   }
 
   Future<void> _startQuiz() async {
@@ -170,7 +187,6 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
     final displayName = widget.appName ?? target?.appName ?? 'App';
 
     if (target == null) {
-      // Refuse to unlock everything — user must have a target app.
       if (Platform.isAndroid) {
         await BlockingService.instance.hideBlockOverlay();
       }
@@ -198,17 +214,14 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
         );
         return;
       }
-      // Scoped: one package only — never grantUnlockAll
       await BlockingService.instance.grantTemporaryUnlock(
         package,
         minutes: mins,
       );
       await BlockingService.instance.startListening();
     } else if (Platform.isIOS) {
-      final bundleId = target.bundleId.isNotEmpty
-          ? target.bundleId
-          : null;
-      // unlockAll must stay false
+      final bundleId =
+          target.bundleId.isNotEmpty ? target.bundleId : null;
       await IosNudgeService.instance.onWorkoutCompleted(
         unlockMinutes: mins,
         bundleId: bundleId,
@@ -222,9 +235,7 @@ class _ReadingUnlockScreenState extends State<ReadingUnlockScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          '$displayName unlocked for $mins min — quiz passed!',
-        ),
+        content: Text('$displayName unlocked for $mins min — quiz passed!'),
       ),
     );
     Navigator.of(context).pop(true);
