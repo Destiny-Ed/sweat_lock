@@ -266,8 +266,6 @@ class HiveService {
   static String? getLinkedPartnerCode() =>
       _settings.get('linked_partner_code') as String?;
 
-  // ---- Public accountability feed ----
-  /// off | wins_only | wins_and_fails
   static Future<void> setPublicAccountabilityMode(String mode) async {
     await _settings.put('public_accountability_mode', mode);
   }
@@ -312,22 +310,37 @@ class HiveService {
   static Future<void> addAccountabilityEvent(Map<String, dynamic> event) async {
     final list = getAccountabilityEvents();
     list.insert(0, event);
-    // keep last 50
-    final trimmed = list.take(50).toList();
-    await _settings.put('accountability_events', trimmed);
+    await _settings.put('accountability_events', list.take(50).toList());
   }
 
   static List<Map<String, dynamic>> getAccountabilityEvents() {
-    final raw = _settings.get('accountability_events', defaultValue: <dynamic>[]);
+    final raw =
+        _settings.get('accountability_events', defaultValue: <dynamic>[]);
     return (raw as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
   }
 
   static List<Map<String, dynamic>> getPendingAccountabilityEvents() {
-    return getAccountabilityEvents()
-        .where((e) => e['posted'] != true)
-        .toList();
+    return getAccountabilityEvents().where((e) => e['posted'] != true).toList();
+  }
+
+  static Future<void> incrementReadingUnlocks() async {
+    await _settings.put('reading_unlocks', getReadingUnlocks() + 1);
+  }
+
+  static int getReadingUnlocks() {
+    return _settings.get('reading_unlocks', defaultValue: 0) as int;
+  }
+
+  static Future<void> addEstimatedMinutesSaved(int minutes) async {
+    if (minutes <= 0) return;
+    await _settings.put(
+        'minutes_saved', getEstimatedMinutesSaved() + minutes);
+  }
+
+  static int getEstimatedMinutesSaved() {
+    return _settings.get('minutes_saved', defaultValue: 0) as int;
   }
 
   static Future<void> setPackageUnlockUntil(
